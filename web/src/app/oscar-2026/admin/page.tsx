@@ -1,6 +1,7 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
 type Category = {
@@ -21,6 +22,8 @@ type Result = {
 };
 
 export default function AdminPage() {
+  const router = useRouter();
+
   const [categories, setCategories] = useState<Category[]>([]);
   const [nominees, setNominees] = useState<Nominee[]>([]);
   const [results, setResults] = useState<Record<string, string>>({});
@@ -39,7 +42,7 @@ export default function AdminPage() {
       const token = sessionData.session?.access_token;
 
       if (!token) {
-        window.location.href = "/login";
+        router.push("/login");
         return;
       }
 
@@ -114,18 +117,17 @@ export default function AdminPage() {
     }
 
     load();
-  }, []);
+  }, [router]);
 
   async function setWinner(categoryId: string, nomineeId: string) {
     setError(null);
     setSavingCat(categoryId);
 
-    // token novamente (pode expirar)
     const { data: sessionData } = await supabase.auth.getSession();
     const token = sessionData.session?.access_token;
 
     if (!token) {
-      window.location.href = "/login";
+      router.push("/login");
       return;
     }
 
@@ -162,7 +164,9 @@ export default function AdminPage() {
     return (
       <main style={{ padding: 24 }}>
         <h1 style={{ fontSize: 24 }}>Acesso negado</h1>
-        <p style={{ opacity: 0.8 }}>Você não tem permissão para ver esta página.</p>
+        <p style={{ opacity: 0.8 }}>
+          Você não tem permissão para ver esta página.
+        </p>
       </main>
     );
   }
@@ -200,10 +204,20 @@ export default function AdminPage() {
               opacity: savingCat === cat.id ? 0.7 : 1,
             }}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
+            <div
+              style={{
+                display: "flex",
+                justifyContent: "space-between",
+                gap: 12,
+              }}
+            >
               <h2 style={{ margin: 0 }}>{cat.name}</h2>
               <span style={{ opacity: 0.7, fontSize: 12 }}>
-                {savingCat === cat.id ? "Salvando..." : results[cat.id] ? "Salvo ✅" : ""}
+                {savingCat === cat.id
+                  ? "Salvando..."
+                  : results[cat.id]
+                  ? "Salvo ✅"
+                  : ""}
               </span>
             </div>
 
@@ -212,7 +226,10 @@ export default function AdminPage() {
                 const label = n.film ? `${n.name} — ${n.film}` : n.name;
 
                 return (
-                  <label key={n.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label
+                    key={n.id}
+                    style={{ display: "flex", gap: 8, alignItems: "center" }}
+                  >
                     <input
                       type="radio"
                       checked={results[cat.id] === n.id}
