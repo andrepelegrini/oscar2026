@@ -9,11 +9,6 @@ type ScoreRow = {
   correct_count: number;
 };
 
-type UserRow = {
-  id: string;
-  email: string;
-};
-
 export default function RankingPage() {
   const [scores, setScores] = useState<ScoreRow[]>([]);
   const [users, setUsers] = useState<Record<string, string>>({});
