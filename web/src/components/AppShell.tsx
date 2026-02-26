@@ -46,16 +46,7 @@ export function AppShell({
 
   return (
     <>
-      <header
-        style={{
-          position: "sticky",
-          top: 0,
-          zIndex: 20,
-          background: "linear-gradient(180deg, #2B0F1A, #1A0C12)",
-          borderBottom: "1px solid var(--border)",
-          boxShadow: "0 4px 20px rgba(0,0,0,0.6)",
-        }}
-      >
+      <header className="headerShell">
         <div className="container" style={{ padding: "14px 0" }}>
           <div
             style={{
@@ -63,49 +54,46 @@ export function AppShell({
               justifyContent: "space-between",
               gap: 12,
               flexWrap: "wrap",
+              alignItems: "center",
             }}
           >
-            <div style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
-              <Link
-                href="/"
-                style={{
-                  fontFamily: "var(--font-display)",
-                  letterSpacing: "1px",
-                }}
-              >
-                BOLÃO ÓSCAR 2026
+            <div style={{ display: "flex", alignItems: "center", gap: 18, flexWrap: "wrap" }}>
+              <Link href="/" className="brandPlate">
+                <span className="dot" />
+                <span style={{ fontFamily: "var(--font-display)", letterSpacing: "1.2px" }}>
+                  BOLÃO ÓSCAR 2026
+                </span>
               </Link>
 
-              <nav style={{ display: "flex", gap: 14 }}>
-                <Link href="/oscar-2026/palpites">Palpites</Link>
-                <Link href="/oscar-2026/ranking">Ranking</Link>
-                {isAdmin && <Link href="/oscar-2026/admin">Admin</Link>}
+              <nav className="nav">
+                <Link className="navlink" href="/oscar-2026/palpites">Palpites</Link>
+                <Link className="navlink" href="/oscar-2026/ranking">Ranking</Link>
+                {isAdmin && <Link className="navlink" href="/oscar-2026/admin">Admin</Link>}
               </nav>
             </div>
 
-            <div style={{ display: "flex", gap: 10 }}>
+            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
               {!authed ? (
-                <Link href="/login">Entrar</Link>
+                <Link className="navlink" href="/login">Entrar</Link>
               ) : (
-                <Button variant="ghost" onClick={signOut}>
-                  Sair
-                </Button>
+                <Button variant="ghost" onClick={signOut}>Sair</Button>
               )}
             </div>
           </div>
         </div>
       </header>
 
-      <main className="container" style={{ padding: "32px 0 60px" }}>
+      <main className="container" style={{ padding: "26px 0 64px" }}>
         {(title || subtitle) && (
-          <div style={{ marginBottom: 20 }}>
-            {title && <h1 style={{ margin: 0 }}>{title}</h1>}
-            {subtitle && (
-              <p style={{ color: "var(--text-muted)", marginTop: 6 }}>
-                {subtitle}
-              </p>
-            )}
-            <hr className="sep" />
+          <div className="decoFrame">
+            <div className="decoGlyph">
+              <span />
+              <div>HOLLYWOOD • NOIR</div>
+              <span />
+            </div>
+
+            {title && <h1 style={{ margin: "14px 0 0", fontSize: 34 }}>{title}</h1>}
+            {subtitle && <p style={{ color: "var(--text-muted)", margin: "8px 0 0" }}>{subtitle}</p>}
           </div>
         )}
 

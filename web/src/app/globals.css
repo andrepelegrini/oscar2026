@@ -5,6 +5,7 @@
 
   --gold:#D4AF37;
   --gold-light:#E6C766;
+  --gold-dim:rgba(212,175,55,0.55);
 
   --text:#F5F0E6;
   --text-muted:rgba(245,240,230,0.75);
@@ -29,11 +30,12 @@ body{
   color:var(--text);
   font-family: var(--font-body), system-ui;
   background:
-    radial-gradient(circle at 50% -20%, rgba(212,175,55,0.25), transparent 45%),
+    radial-gradient(circle at 50% -20%, rgba(212,175,55,0.22), transparent 45%),
+    radial-gradient(circle at 15% 10%, rgba(110,15,30,0.22), transparent 52%),
     linear-gradient(180deg, var(--bg-dark), var(--bg-deeper));
 }
 
-/* Art Deco geometric lines overlay */
+/* Art Deco geometric overlay (bem sutil) */
 body::before{
   content:"";
   position:fixed;
@@ -46,14 +48,14 @@ body::before{
       var(--gold) 0px,
       var(--gold) 1px,
       transparent 1px,
-      transparent 80px
+      transparent 90px
     ),
     repeating-linear-gradient(
       -45deg,
       var(--gold) 0px,
       var(--gold) 1px,
       transparent 1px,
-      transparent 80px
+      transparent 90px
     );
 }
 
@@ -74,13 +76,161 @@ a{
   color:var(--gold);
   text-decoration:none;
 }
-a:hover{
-  color:var(--gold-light);
-}
+a:hover{ color:var(--gold-light); }
 
-/* separator */
 hr.sep{
   border:none;
   border-top:1px solid var(--border-soft);
   margin:20px 0;
+}
+
+/* =========================
+   Header "placa dourada"
+   ========================= */
+.headerShell{
+  position: sticky;
+  top: 0;
+  z-index: 20;
+  background: linear-gradient(180deg, #2B0F1A, #1A0C12);
+  border-bottom: 1px solid var(--border);
+  box-shadow: 0 6px 26px rgba(0,0,0,0.6);
+}
+
+.brandPlate{
+  display:inline-flex;
+  align-items:center;
+  gap:10px;
+  padding:10px 14px;
+  border-radius: 999px;
+  border: 1px solid var(--border);
+  background:
+    linear-gradient(90deg, rgba(212,175,55,0.12), rgba(212,175,55,0.02));
+  box-shadow: 0 10px 30px rgba(0,0,0,0.35);
+}
+
+.brandPlate .dot{
+  width:8px;
+  height:8px;
+  border-radius:999px;
+  background: var(--gold);
+  box-shadow: 0 0 18px rgba(212,175,55,0.35);
+}
+
+/* Nav links com underline deco */
+.nav{
+  display:flex;
+  gap:14px;
+  flex-wrap:wrap;
+}
+.navlink{
+  position:relative;
+  color: var(--text);
+  opacity: 0.92;
+  padding: 8px 10px;
+  border-radius: 12px;
+  border: 1px solid transparent;
+  transition: transform .08s ease, border-color .12s ease, background .12s ease;
+}
+.navlink:hover{
+  background: rgba(212,175,55,0.07);
+  border-color: var(--border-soft);
+  transform: translateY(-1px);
+}
+.navlink::after{
+  content:"";
+  position:absolute;
+  left:10px;
+  right:10px;
+  bottom:6px;
+  height:1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+  transform: scaleX(0);
+  transform-origin:center;
+  transition: transform .14s ease;
+}
+.navlink:hover::after{
+  transform: scaleX(1);
+}
+
+/* =========================
+   Moldura Art Deco topo
+   ========================= */
+.decoFrame{
+  position: relative;
+  margin: 18px 0 8px;
+  padding: 18px 0;
+}
+.decoFrame::before,
+.decoFrame::after{
+  content:"";
+  position:absolute;
+  left:0;
+  right:0;
+  height:1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+}
+.decoFrame::before{ top:0; }
+.decoFrame::after{ bottom:0; }
+
+.decoGlyph{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap:14px;
+  color: var(--gold);
+  opacity: .9;
+  font-size: 12px;
+  letter-spacing: 2px;
+  text-transform: uppercase;
+}
+.decoGlyph span{
+  display:inline-block;
+  width: 70px;
+  height: 1px;
+  background: linear-gradient(90deg, transparent, var(--gold-dim), transparent);
+}
+
+/* =========================
+   Cards Art Deco (borda dupla + cantos)
+   ========================= */
+.card{
+  position: relative;
+  background: var(--card);
+  border-radius: var(--radius);
+  border: 1px solid var(--border);
+  box-shadow: var(--shadow);
+  overflow: hidden;
+}
+.card::before{
+  content:"";
+  position:absolute;
+  inset:10px;
+  border-radius: calc(var(--radius) - 8px);
+  border: 1px solid var(--border-soft);
+  pointer-events:none;
+}
+.card::after{
+  content:"";
+  position:absolute;
+  inset:-120px -120px auto auto;
+  width: 260px;
+  height: 260px;
+  background: radial-gradient(circle, rgba(212,175,55,0.14), transparent 62%);
+  transform: rotate(18deg);
+  pointer-events:none;
+  opacity:.75;
+}
+
+.cardHeader{
+  padding: 18px;
+  border-bottom: 1px solid var(--border-soft);
+  background: linear-gradient(90deg, rgba(212,175,55,0.10), transparent);
+}
+.cardContent{
+  padding: 18px;
+}
+
+/* Pequeno ajuste de seleção */
+::selection{
+  background: rgba(212,175,55,0.24);
 }
