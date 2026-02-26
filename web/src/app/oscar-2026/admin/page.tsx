@@ -4,22 +4,9 @@ import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 
-type Category = {
-  id: string;
-  name: string;
-};
-
-type Nominee = {
-  id: string;
-  category_id: string;
-  name: string;
-  film: string | null;
-};
-
-type Result = {
-  category_id: string;
-  winner_nominee_id: string;
-};
+type Category = { id: string; name: string };
+type Nominee = { id: string; category_id: string; name: string; film: string | null };
+type Result = { category_id: string; winner_nominee_id: string };
 
 export default function AdminPage() {
   const router = useRouter();
@@ -35,85 +22,106 @@ export default function AdminPage() {
   useEffect(() => {
     async function load() {
       setError(null);
+      setUnauthorized(false);
       setLoading(true);
 
-      // 1) precisa estar logado
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
+      try {
+        // 1) precisa estar logado
+        const { data: sessionData } = await supabase.auth.getSession();
+        const token = sessionData.session?.access_token;
 
-      if (!token) {
-        router.push("/login");
-        return;
-      }
+        if (!token) {
+          router.push("/login");
+          return;
+        }
 
-      // 2) checar se é admin (server-side)
-      const checkRes = await fetch("/api/admin/check", {
-        headers: { Authorization: `Bearer ${token}` },
-      });
+        // 2) checar se é admin (server-side) com timeout
+        const controller = new AbortController();
+        const timeout = setTimeout(() => controller.abort(), 8000);
 
-      const checkJson = await checkRes.json();
+        let checkRes: Response;
+        try {
+          checkRes = await fetch("/api/admin/check", {
+            headers: { Authorization: `Bearer ${token}` },
+            signal: controller.signal,
+          });
+        } finally {
+          clearTimeout(timeout);
+        }
 
-      if (!checkRes.ok || !checkJson.ok) {
-        setUnauthorized(true);
+        let checkJson: any = null;
+        try {
+          checkJson = await checkRes.json();
+        } catch {
+          // se não vier JSON
+          checkJson = null;
+        }
+
+        if (!checkRes.ok || !checkJson?.ok) {
+          setUnauthorized(true);
+          setLoading(false);
+          return;
+        }
+
+        // 3) carregar dados (read-only via client ok)
+        const { data: event, error: evErr } = await supabase
+          .from("events")
+          .select("id")
+          .eq("slug", "oscar-2026")
+          .single();
+
+        if (evErr || !event) {
+          setError(evErr?.message ?? "Evento não encontrado");
+          setLoading(false);
+          return;
+        }
+
+        const { data: cats, error: catsErr } = await supabase
+          .from("categories")
+          .select("id,name")
+          .eq("event_id", event.id)
+          .order("sort_order");
+
+        if (catsErr) {
+          setError(catsErr.message);
+          setLoading(false);
+          return;
+        }
+
+        const { data: noms, error: nomsErr } = await supabase
+          .from("nominees")
+          .select("id,category_id,name,film");
+
+        if (nomsErr) {
+          setError(nomsErr.message);
+          setLoading(false);
+          return;
+        }
+
+        const { data: res, error: resErr } = await supabase
+          .from("results")
+          .select("category_id,winner_nominee_id");
+
+        if (resErr) {
+          setError(resErr.message);
+          setLoading(false);
+          return;
+        }
+
+        const map: Record<string, string> = {};
+        res?.forEach((r: Result) => {
+          map[r.category_id] = r.winner_nominee_id;
+        });
+
+        setCategories(cats ?? []);
+        setNominees(noms ?? []);
+        setResults(map);
         setLoading(false);
-        return;
-      }
-
-      // 3) carregar dados (read-only via client ok)
-      const { data: event, error: evErr } = await supabase
-        .from("events")
-        .select("id")
-        .eq("slug", "oscar-2026")
-        .single();
-
-      if (evErr || !event) {
-        setError(evErr?.message ?? "Evento não encontrado");
+      } catch (e: any) {
+        // Aqui é a diferença: se der qualquer erro, você VÊ na tela
+        setError(e?.message ?? String(e));
         setLoading(false);
-        return;
       }
-
-      const { data: cats, error: catsErr } = await supabase
-        .from("categories")
-        .select("id,name")
-        .eq("event_id", event.id)
-        .order("sort_order");
-
-      if (catsErr) {
-        setError(catsErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: noms, error: nomsErr } = await supabase
-        .from("nominees")
-        .select("id,category_id,name,film");
-
-      if (nomsErr) {
-        setError(nomsErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const { data: res, error: resErr } = await supabase
-        .from("results")
-        .select("category_id,winner_nominee_id");
-
-      if (resErr) {
-        setError(resErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const map: Record<string, string> = {};
-      res?.forEach((r: Result) => {
-        map[r.category_id] = r.winner_nominee_id;
-      });
-
-      setCategories(cats ?? []);
-      setNominees(noms ?? []);
-      setResults(map);
-
-      setLoading(false);
     }
 
     load();
@@ -123,39 +131,37 @@ export default function AdminPage() {
     setError(null);
     setSavingCat(categoryId);
 
-    const { data: sessionData } = await supabase.auth.getSession();
-    const token = sessionData.session?.access_token;
+    try {
+      const { data: sessionData } = await supabase.auth.getSession();
+      const token = sessionData.session?.access_token;
 
-    if (!token) {
-      router.push("/login");
-      return;
+      if (!token) {
+        router.push("/login");
+        return;
+      }
+
+      const res = await fetch("/api/admin/set-winner", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${token}`,
+        },
+        body: JSON.stringify({ category_id: categoryId, winner_nominee_id: nomineeId }),
+      });
+
+      const json = await res.json().catch(() => ({}));
+
+      if (!res.ok) {
+        setError(json.error ?? "Erro ao salvar vencedor");
+        return;
+      }
+
+      setResults((prev) => ({ ...prev, [categoryId]: nomineeId }));
+    } catch (e: any) {
+      setError(e?.message ?? String(e));
+    } finally {
+      setSavingCat(null);
     }
-
-    const res = await fetch("/api/admin/set-winner", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${token}`,
-      },
-      body: JSON.stringify({
-        category_id: categoryId,
-        winner_nominee_id: nomineeId,
-      }),
-    });
-
-    const json = await res.json().catch(() => ({}));
-
-    setSavingCat(null);
-
-    if (!res.ok) {
-      setError(json.error ?? "Erro ao salvar vencedor");
-      return;
-    }
-
-    setResults((prev) => ({
-      ...prev,
-      [categoryId]: nomineeId,
-    }));
   }
 
   if (loading) return <main style={{ padding: 24 }}>Carregando...</main>;
@@ -164,28 +170,17 @@ export default function AdminPage() {
     return (
       <main style={{ padding: 24 }}>
         <h1 style={{ fontSize: 24 }}>Acesso negado</h1>
-        <p style={{ opacity: 0.8 }}>
-          Você não tem permissão para ver esta página.
-        </p>
+        <p style={{ opacity: 0.8 }}>Você não tem permissão para ver esta página.</p>
       </main>
     );
   }
 
   return (
     <main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 12 }}>
-        Admin — Lançar vencedores
-      </h1>
+      <h1 style={{ fontSize: 28, marginBottom: 12 }}>Admin — Lançar vencedores</h1>
 
       {error && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 12,
-            border: "1px solid crimson",
-            borderRadius: 12,
-          }}
-        >
+        <div style={{ marginBottom: 16, padding: 12, border: "1px solid crimson", borderRadius: 12 }}>
           <b>Erro:</b> {error}
         </div>
       )}
@@ -204,20 +199,10 @@ export default function AdminPage() {
               opacity: savingCat === cat.id ? 0.7 : 1,
             }}
           >
-            <div
-              style={{
-                display: "flex",
-                justifyContent: "space-between",
-                gap: 12,
-              }}
-            >
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <h2 style={{ margin: 0 }}>{cat.name}</h2>
               <span style={{ opacity: 0.7, fontSize: 12 }}>
-                {savingCat === cat.id
-                  ? "Salvando..."
-                  : results[cat.id]
-                  ? "Salvo ✅"
-                  : ""}
+                {savingCat === cat.id ? "Salvando..." : results[cat.id] ? "Salvo ✅" : ""}
               </span>
             </div>
 
@@ -226,10 +211,7 @@ export default function AdminPage() {
                 const label = n.film ? `${n.name} — ${n.film}` : n.name;
 
                 return (
-                  <label
-                    key={n.id}
-                    style={{ display: "flex", gap: 8, alignItems: "center" }}
-                  >
+                  <label key={n.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     <input
                       type="radio"
                       checked={results[cat.id] === n.id}
