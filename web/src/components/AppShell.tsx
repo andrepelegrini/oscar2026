@@ -1,6 +1,8 @@
 "use client";
 
 import { useEffect, useState } from "react";
+import Link from "next/link";
+import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { Button } from "@/components/ui/Button";
 
@@ -13,6 +15,8 @@ export function AppShell({
   subtitle?: string;
   children: React.ReactNode;
 }) {
+  const router = useRouter();
+
   const [isAdmin, setIsAdmin] = useState(false);
   const [authed, setAuthed] = useState(false);
 
@@ -37,12 +41,11 @@ export function AppShell({
 
   async function signOut() {
     await supabase.auth.signOut();
-    window.location.href = "/";
+    router.push("/");
   }
 
   return (
     <>
-      <div className="noir-rays" />
       <header
         style={{
           position: "sticky",
@@ -54,21 +57,35 @@ export function AppShell({
         }}
       >
         <div className="container" style={{ padding: "14px 0" }}>
-          <div style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap" }}>
-            <div style={{ display: "flex", alignItems: "baseline", gap: 14 }}>
-              <a href="/" style={{ fontFamily: "var(--font-display)", letterSpacing: ".8px" }}>
+          <div
+            style={{
+              display: "flex",
+              justifyContent: "space-between",
+              gap: 12,
+              flexWrap: "wrap",
+            }}
+          >
+            <div style={{ display: "flex", alignItems: "baseline", gap: 18 }}>
+              <Link
+                href="/"
+                style={{
+                  fontFamily: "var(--font-display)",
+                  letterSpacing: "1px",
+                }}
+              >
                 BOLÃO ÓSCAR 2026
-              </a>
-              <nav style={{ display: "flex", gap: 12, opacity: 0.9, flexWrap: "wrap" }}>
-                <a href="/oscar-2026/palpites">Palpites</a>
-                <a href="/oscar-2026/ranking">Ranking</a>
-                {isAdmin && <a href="/oscar-2026/admin">Admin</a>}
+              </Link>
+
+              <nav style={{ display: "flex", gap: 14 }}>
+                <Link href="/oscar-2026/palpites">Palpites</Link>
+                <Link href="/oscar-2026/ranking">Ranking</Link>
+                {isAdmin && <Link href="/oscar-2026/admin">Admin</Link>}
               </nav>
             </div>
 
-            <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <div style={{ display: "flex", gap: 10 }}>
               {!authed ? (
-                <a href="/login">Entrar</a>
+                <Link href="/login">Entrar</Link>
               ) : (
                 <Button variant="ghost" onClick={signOut}>
                   Sair
@@ -79,14 +96,19 @@ export function AppShell({
         </div>
       </header>
 
-      <main className="container" style={{ padding: "22px 0 56px" }}>
+      <main className="container" style={{ padding: "32px 0 60px" }}>
         {(title || subtitle) && (
-          <div style={{ marginBottom: 16 }}>
-            {title && <h1 style={{ margin: 0, fontSize: 32 }}>{title}</h1>}
-            {subtitle && <p style={{ margin: "8px 0 0", color: "var(--muted)" }}>{subtitle}</p>}
+          <div style={{ marginBottom: 20 }}>
+            {title && <h1 style={{ margin: 0 }}>{title}</h1>}
+            {subtitle && (
+              <p style={{ color: "var(--text-muted)", marginTop: 6 }}>
+                {subtitle}
+              </p>
+            )}
             <hr className="sep" />
           </div>
         )}
+
         {children}
       </main>
     </>
