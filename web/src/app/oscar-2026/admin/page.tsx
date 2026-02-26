@@ -8,6 +8,12 @@ type Category = { id: string; name: string };
 type Nominee = { id: string; category_id: string; name: string; film: string | null };
 type Result = { category_id: string; winner_nominee_id: string };
 
+type AdminCheckResponse = { ok: boolean; error?: string };
+
+type ApiErrorResponse = { error?: string };
+type ApiOkResponse = { ok: true };
+type SetWinnerResponse = ApiOkResponse | ApiErrorResponse;
+
 export default function AdminPage() {
   const router = useRouter();
 
@@ -26,7 +32,6 @@ export default function AdminPage() {
       setLoading(true);
 
       try {
-        // 1) precisa estar logado
         const { data: sessionData } = await supabase.auth.getSession();
         const token = sessionData.session?.access_token;
 
@@ -35,7 +40,6 @@ export default function AdminPage() {
           return;
         }
 
-        // 2) checar se é admin (server-side) com timeout
         const controller = new AbortController();
         const timeout = setTimeout(() => controller.abort(), 8000);
 
@@ -49,26 +53,21 @@ export default function AdminPage() {
           clearTimeout(timeout);
         }
 
-        let checkJson: any = null;
-        try {
-          checkJson = await checkRes.json();
-        } catch {
-          // se não vier JSON
-          checkJson = null;
-        }
+        const checkJson = (await checkRes
+          .json()
+          .catch((): AdminCheckResponse => ({ ok: false, error: "Bad JSON" }))) as AdminCheckResponse;
 
-        if (!checkRes.ok || !checkJson?.ok) {
+        if (!checkRes.ok || !checkJson.ok) {
           setUnauthorized(true);
           setLoading(false);
           return;
         }
 
-        // 3) carregar dados (read-only via client ok)
         const { data: event, error: evErr } = await supabase
           .from("events")
           .select("id")
           .eq("slug", "oscar-2026")
-          .single();
+          .single<{ id: string }>();
 
         if (evErr || !event) {
           setError(evErr?.message ?? "Evento não encontrado");
@@ -80,7 +79,8 @@ export default function AdminPage() {
           .from("categories")
           .select("id,name")
           .eq("event_id", event.id)
-          .order("sort_order");
+          .order("sort_order")
+          .returns<Category[]>();
 
         if (catsErr) {
           setError(catsErr.message);
@@ -90,7 +90,8 @@ export default function AdminPage() {
 
         const { data: noms, error: nomsErr } = await supabase
           .from("nominees")
-          .select("id,category_id,name,film");
+          .select("id,category_id,name,film")
+          .returns<Nominee[]>();
 
         if (nomsErr) {
           setError(nomsErr.message);
@@ -100,7 +101,8 @@ export default function AdminPage() {
 
         const { data: res, error: resErr } = await supabase
           .from("results")
-          .select("category_id,winner_nominee_id");
+          .select("category_id,winner_nominee_id")
+          .returns<Result[]>();
 
         if (resErr) {
           setError(resErr.message);
@@ -109,7 +111,7 @@ export default function AdminPage() {
         }
 
         const map: Record<string, string> = {};
-        res?.forEach((r: Result) => {
+        res?.forEach((r) => {
           map[r.category_id] = r.winner_nominee_id;
         });
 
@@ -117,9 +119,9 @@ export default function AdminPage() {
         setNominees(noms ?? []);
         setResults(map);
         setLoading(false);
-      } catch (e: any) {
-        // Aqui é a diferença: se der qualquer erro, você VÊ na tela
-        setError(e?.message ?? String(e));
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : String(e);
+        setError(msg);
         setLoading(false);
       }
     }
@@ -149,16 +151,17 @@ export default function AdminPage() {
         body: JSON.stringify({ category_id: categoryId, winner_nominee_id: nomineeId }),
       });
 
-      const json = await res.json().catch(() => ({}));
+      const json = (await res.json().catch((): SetWinnerResponse => ({}))) as SetWinnerResponse;
 
       if (!res.ok) {
-        setError(json.error ?? "Erro ao salvar vencedor");
+        setError(("error" in json && json.error) ? json.error : "Erro ao salvar vencedor");
         return;
       }
 
       setResults((prev) => ({ ...prev, [categoryId]: nomineeId }));
-    } catch (e: any) {
-      setError(e?.message ?? String(e));
+    } catch (e) {
+      const msg = e instanceof Error ? e.message : String(e);
+      setError(msg);
     } finally {
       setSavingCat(null);
     }
