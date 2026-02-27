@@ -89,6 +89,9 @@ export default function HomePage() {
           </div>
         </div>
       </section>
+      <footer className="siteFooter">
+        © {new Date().getFullYear()} André Pelegrini, founder @ Cadenzia. Todos os direitos reservados.
+      </footer>
     </AppShell>
   );
 }

@@ -416,3 +416,27 @@ hr.sep{
     text-transform: uppercase;
     color: rgba(245,240,230,0.72);
   }
+
+  /* =========================
+   Footer Art Deco
+   ========================= */
+.siteFooter{
+  margin-top: 60px;
+  padding: 28px 0 12px;
+  text-align: center;
+  font-size: 13px;
+  letter-spacing: 1.6px;
+  text-transform: uppercase;
+  color: rgba(212,175,55,0.75);
+  position: relative;
+}
+
+.siteFooter::before{
+  content:"";
+  display:block;
+  width: 140px;
+  height: 1px;
+  margin: 0 auto 18px;
+  background: linear-gradient(90deg, transparent, var(--gold), transparent);
+  opacity: 0.5;
+}
