@@ -73,7 +73,11 @@ export default function HomePage() {
               <CardContent>
                 <div className="posterInner">
                   <div className="posterFrame" />
-                  <OscarStatuette />
+                  <img
+                    src="/oscar.png"
+                    alt="Estatueta do Oscar"
+                    style={{ width: "min(240px, 60%)", height: "auto", filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.55))" }}
+                  />
                   <div className="posterText">
                     <div className="posterTop">THE ACADEMY</div>
                     <div className="posterBig">OSCAR</div>
