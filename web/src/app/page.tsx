@@ -35,10 +35,10 @@ export default function HomePage() {
       <section className="hero">
         <div className="heroGrid">
           <div>
-            <div className="heroKicker">ART DECO • NOIR • 2026</div>
+            <div className="heroKicker">• 2026 •</div>
             <h1 className="heroTitle">Bolão do Óscar</h1>
             <p className="heroSubtitle">
-              Faça seus palpites, acompanhe o ranking e lance os vencedores no grande dia.
+              Faça seus palpites e acompanhe o ranking ao vivo durante o grande dia.
             </p>
 
             <div className="heroActions">
