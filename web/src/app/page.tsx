@@ -10,13 +10,16 @@ export default function HomePage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
-  const [participantId, setLocalParticipantId] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
 
-  useEffect(() => {
-    const id = getParticipantId();
-    if (id) setLocalParticipantId(id);
-  }, []);
+  // Inicialização preguiçosa (Lazy Initializer)
+  // Resolve o erro do ESLint e evita re-renderizações desnecessárias
+  const [participantId, setLocalParticipantId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") {
+      return getParticipantId();
+    }
+    return null;
+  });
 
   async function handleEnter() {
     if (!name.trim()) return;
@@ -35,15 +38,22 @@ export default function HomePage() {
       return;
     }
 
+    // Atualiza o storage e o estado local
     setParticipantId(data.id);
+    setLocalParticipantId(data.id);
+    
     router.push("/oscar-2026/palpites");
   }
 
+  // Tela de Login (Se não houver ID de participante)
   if (!participantId) {
     return (
       <AppShell>
-        <div style={{ maxWidth: 500, margin: "80px auto" }}>
-          <h1 style={{ fontSize: 42 }}>Entrar no Bolão</h1>
+        <div style={{ maxWidth: 500, margin: "80px auto", padding: "0 20px" }}>
+          <h1 style={{ fontSize: 42, marginBottom: 8 }}>Entrar no Bolão</h1>
+          <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>
+            Participe e faça seus palpites para o Oscar 2026.
+          </p>
 
           <input
             placeholder="Digite seu nome"
@@ -52,12 +62,12 @@ export default function HomePage() {
             style={{
               width: "100%",
               padding: 14,
-              marginTop: 20,
               borderRadius: 12,
               border: "1px solid var(--border)",
               background: "var(--card)",
               color: "var(--text)",
               fontSize: 16,
+              outline: "none"
             }}
           />
 
@@ -70,10 +80,12 @@ export default function HomePage() {
               padding: 14,
               borderRadius: 14,
               border: "none",
-              cursor: "pointer",
-              background:
-                "linear-gradient(180deg, var(--gold), var(--gold-light))",
+              cursor: loading ? "not-allowed" : "pointer",
+              background: "linear-gradient(180deg, var(--gold), var(--gold-light))",
+              color: "#000",
               fontWeight: 600,
+              fontSize: 16,
+              opacity: loading ? 0.7 : 1
             }}
           >
             {loading ? "Entrando..." : "Entrar no Bolão"}
@@ -83,23 +95,31 @@ export default function HomePage() {
     );
   }
 
-  // Se já existe participant_id
+  // Tela de Boas-vindas (Se já existe participante logado)
   return (
     <AppShell>
-      <div style={{ textAlign: "center", marginTop: 80 }}>
-        <h1>Bem-vindo ao Bolão 🎬</h1>
+      <div style={{ textAlign: "center", marginTop: 80, padding: "0 20px" }}>
+        <h1 style={{ fontSize: 36 }}>Bem-vindo ao Bolão 🎬</h1>
+        <p style={{ marginTop: 8, color: "var(--text-muted)" }}>
+          Seu acesso está ativo. Pronto para votar?
+        </p>
+        
         <button
           style={{
-            marginTop: 20,
-            padding: 16,
+            marginTop: 24,
+            padding: "16px 32px",
             borderRadius: 14,
             border: "1px solid var(--border)",
             background: "var(--card)",
+            color: "var(--text)",
             cursor: "pointer",
+            fontWeight: 500,
+            fontSize: 16,
+            transition: "all 0.2s"
           }}
           onClick={() => router.push("/oscar-2026/palpites")}
         >
-          Fazer meus palpites
+          Ir para Meus Palpites
         </button>
       </div>
     </AppShell>
