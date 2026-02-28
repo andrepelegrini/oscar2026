@@ -23,17 +23,11 @@ export default function HomePage() {
 
     setLoading(true);
 
-    const { data, error } = await supabase
+    const { data } = await supabase
       .from("participants")
-      .insert({ name: name.trim() })
+      .insert({ name })
       .select()
       .single();
-
-    if (error) {
-      alert("Erro ao criar participante.");
-      setLoading(false);
-      return;
-    }
 
     setParticipantId(data.id);
     router.push("/oscar-2026/palpites");
