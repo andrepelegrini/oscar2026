@@ -21,6 +21,8 @@ export default function PalpitesPage() {
   const [nominees, setNominees] = useState<NomineeRow[]>([]);
   const [predByCat, setPredByCat] = useState<Record<string, string>>({});
 
+  const [isFinished, setIsFinished] = useState(false);
+
   const nomineesByCategory = useMemo(() => {
     const map: Record<string, NomineeRow[]> = {};
     for (const n of nominees) {
@@ -61,7 +63,7 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 2. Carregar categorias e indicados em paralelo para performance
+      // 2. Carregar categorias, indicados e palpites em paralelo
       const [catsRes, nomsRes, predsRes] = await Promise.all([
         supabase.from("categories").select("*").eq("event_id", ev.id).order("sort_order"),
         supabase.from("nominees").select("*"),
@@ -100,11 +102,11 @@ export default function PalpitesPage() {
     const { error: upsertErr } = await supabase.from("predictions").upsert(
       {
         event_id: event.id,
-        user_id: pId, // Aqui usamos o seu UUID do participante na coluna user_id
+        user_id: pId, 
         category_id: categoryId,
         nominee_id: nomineeId,
       },
-      { onConflict: "event_id,user_id,category_id" } // O banco precisa de um unique index nessas 3 colunas
+      { onConflict: "event_id,user_id,category_id" }
     );
 
     if (upsertErr) {
@@ -116,6 +118,55 @@ export default function PalpitesPage() {
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Carregando bolão...</div>;
+
+  if (isFinished) {
+    return (
+      <div style={{ 
+        textAlign: "center", 
+        marginTop: 100, 
+        padding: "0 20px",
+        display: 'flex',
+        flexDirection: 'column',
+        alignItems: 'center'
+      }}>
+        <div style={{ fontSize: 80, marginBottom: 20 }}>🏆</div>
+        <h1 style={{ fontSize: 32, marginBottom: 12 }}>Palpites Enviados!</h1>
+        <p style={{ opacity: 0.7, maxWidth: 450, marginBottom: 32, lineHeight: 1.6 }}>
+          Seus votos para o Oscar 2026 foram registrados. 
+          Você pode voltar e alterar suas escolhas a qualquer momento.
+        </p>
+        <div style={{ display: 'flex', gap: 12 }}>
+          <button
+            onClick={() => setIsFinished(false)}
+            style={{
+              padding: "14px 24px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              cursor: "pointer",
+              color: "var(--text)"
+            }}
+          >
+            Revisar palpites
+          </button>
+          <button
+            onClick={() => router.push("/oscar-2026/ranking")}
+            style={{
+              padding: "14px 24px",
+              borderRadius: 12,
+              border: "none",
+              background: "linear-gradient(180deg, var(--gold), var(--gold-light))",
+              color: "#000",
+              fontWeight: 700,
+              cursor: "pointer"
+            }}
+          >
+            Ver Ranking →
+          </button>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 20px" }}>
@@ -169,11 +220,35 @@ export default function PalpitesPage() {
             </div>
             
             <div style={{ marginTop: 12, height: 20, fontSize: 12, color: "var(--gold)", textAlign: "right" }}>
-              {saving === cat.id && "Salvando..."}
+              {saving === cat.id ? "Salvando..." : predByCat[cat.id] ? "Salvo ✅" : ""}
             </div>
           </section>
         ))}
       </div>
+
+      {!loading && categories.length > 0 && (
+        <div style={{ marginTop: 60, textAlign: 'center', paddingBottom: 80 }}>
+          <button
+            onClick={() => {
+              window.scrollTo({ top: 0, behavior: 'smooth' });
+              setIsFinished(true);
+            }}
+            style={{
+              padding: "20px 60px",
+              fontSize: 18,
+              fontWeight: 700,
+              borderRadius: 16,
+              border: "none",
+              background: "linear-gradient(180deg, var(--gold), var(--gold-light))",
+              color: "#000",
+              cursor: "pointer",
+              boxShadow: "0 10px 20px rgba(212, 175, 55, 0.2)"
+            }}
+          >
+            Enviar Palpites 🎬
+          </button>
+        </div>
+      )}
     </div>
   );
 }
