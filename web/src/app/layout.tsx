@@ -16,7 +16,7 @@ const inter = Inter({
 
 export const metadata: Metadata = {
   title: "Bolão Óscar 2026",
-  description: "Bolão com estilo Art Deco/Noir",
+  description: "São Paulo Futebol Clube Soberano",
 };
 
 export default function RootLayout({ children }: { children: React.ReactNode }) {
