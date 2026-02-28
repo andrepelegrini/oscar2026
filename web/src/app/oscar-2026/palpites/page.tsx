@@ -8,6 +8,12 @@ type CategoryRow = { id: string; name: string; weight: number; sort_order: numbe
 type NomineeRow = { id: string; category_id: string; name: string; film: string | null };
 type PredictionRow = { category_id: string; nominee_id: string };
 
+// localStorage helper
+function getParticipantId(): string | null {
+  if (typeof window === "undefined") return null;
+  return localStorage.getItem("participant_id");
+}
+
 export default function PalpitesPage() {
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
@@ -40,14 +46,14 @@ export default function PalpitesPage() {
       setError(null);
       setLoading(true);
 
-      // 1) session guard
-      const { data: sess } = await supabase.auth.getSession();
-      if (!sess.session?.user) {
-        window.location.href = "/login";
+      // 0) participant guard (sem login)
+      const participantId = getParticipantId();
+      if (!participantId) {
+        window.location.href = "/";
         return;
       }
 
-      // 2) carregar evento
+      // 1) carregar evento
       const ev = await supabase
         .from("events")
         .select("id,slug,deadline_at")
@@ -60,7 +66,7 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 3) carregar categorias
+      // 2) carregar categorias
       const cats = await supabase
         .from("categories")
         .select("id,name,weight,sort_order")
@@ -74,7 +80,7 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 4) carregar nominees (por todas categorias do evento)
+      // 3) carregar nominees (por todas categorias do evento)
       const catIds = cats.data.map((c) => c.id);
 
       const noms = await supabase
@@ -89,11 +95,12 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 5) carregar palpites do usuário
+      // 4) carregar palpites DO PARTICIPANTE (filtrado)
       const preds = await supabase
         .from("predictions")
         .select("category_id,nominee_id")
         .eq("event_id", ev.data.id)
+        .eq("participant_id", participantId)
         .returns<PredictionRow[]>();
 
       if (preds.error) {
@@ -119,34 +126,32 @@ export default function PalpitesPage() {
   async function choose(categoryId: string, nomineeId: string) {
     if (!event) return;
 
+    // participant guard (sem login)
+    const participantId = getParticipantId();
+    if (!participantId) {
+      window.location.href = "/";
+      return;
+    }
+
     setError(null);
     setSaving(categoryId);
 
     // otimista no UI
     setPredByCat((prev) => ({ ...prev, [categoryId]: nomineeId }));
 
-    // pega user_id da sessão
-    const { data: sess } = await supabase.auth.getSession();
-    const user = sess.session?.user;
-    if (!user) {
-      window.location.href = "/login";
-      return;
-    }
-
     const { error: upsertErr } = await supabase.from("predictions").upsert(
       {
         event_id: event.id,
-        user_id: user.id,
+        participant_id: participantId,
         category_id: categoryId,
         nominee_id: nomineeId,
       },
-      { onConflict: "event_id,user_id,category_id" }
+      { onConflict: "event_id,participant_id,category_id" }
     );
 
     setSaving(null);
 
     if (upsertErr) {
-      // reverte se falhar
       setError(upsertErr.message);
     }
   }
@@ -161,8 +166,9 @@ export default function PalpitesPage() {
         <h1 style={{ fontSize: 24, marginBottom: 12 }}>Meus palpites</h1>
         <p style={{ color: "crimson" }}>{error}</p>
         <p style={{ marginTop: 12 }}>
-          Dica: confira se as policies de RLS permitem SELECT em categories/nominees/events e
-          SELECT/UPSERT em predictions.
+          Dica: confira se o schema tem <b>participant_id</b> em predictions e se existe unique em{" "}
+          <code>(event_id, participant_id, category_id)</code>. Se RLS estiver ligado, você precisa de
+          policy compatível com fluxo sem login.
         </p>
       </main>
     );
