@@ -73,7 +73,21 @@ export default function HomePage() {
             <p className="heroSubtitle">
               Entre com seu nome, faça seus palpites e acompanhe o ranking. Sem login.
             </p>
-
+            <div style={{
+              position: "fixed",
+              bottom: 12,
+              left: 12,
+              zIndex: 9999,
+              padding: "6px 10px",
+              border: "1px solid var(--border)",
+              borderRadius: 12,
+              background: "rgba(0,0,0,0.35)",
+              color: "var(--gold)",
+              fontSize: 12,
+              letterSpacing: 2
+            }}>
+              HOME ✅ / (page.tsx)
+            </div>
             <div className="heroActions">
               {/* Botão principal */}
               <button
