@@ -4,6 +4,7 @@ import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { getParticipantId } from "@/lib/participant";
 import { useRouter } from "next/navigation";
+import Image from "next/image";
 
 type EventRow = { id: string; slug: string; deadline_at: string };
 type CategoryRow = { id: string; name: string; weight: number; sort_order: number };
@@ -50,7 +51,6 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 1. Carregar evento
       const { data: ev, error: evErr } = await supabase
         .from("events")
         .select("id,slug,deadline_at")
@@ -63,7 +63,6 @@ export default function PalpitesPage() {
         return;
       }
 
-      // 2. Carregar categorias, indicados e palpites em paralelo
       const [catsRes, nomsRes, predsRes] = await Promise.all([
         supabase.from("categories").select("*").eq("event_id", ev.id).order("sort_order"),
         supabase.from("nominees").select("*"),
@@ -71,7 +70,7 @@ export default function PalpitesPage() {
       ]);
 
       if (catsRes.error || nomsRes.error || predsRes.error) {
-        setError("Erro ao carregar dados do banco.");
+        setError("Erro ao carregar dados.");
         setLoading(false);
         return;
       }
@@ -91,12 +90,10 @@ export default function PalpitesPage() {
 
   async function choose(categoryId: string, nomineeId: string) {
     if (!event || isLocked) return;
-
     const pId = getParticipantId();
     if (!pId) return router.push("/");
 
     setSaving(categoryId);
-    // Update local state (optimistic)
     setPredByCat(prev => ({ ...prev, [categoryId]: nomineeId }));
 
     const { error: upsertErr } = await supabase.from("predictions").upsert(
@@ -109,33 +106,69 @@ export default function PalpitesPage() {
       { onConflict: "event_id,user_id,category_id" }
     );
 
-    if (upsertErr) {
-      console.error(upsertErr);
-      alert("Erro ao salvar palpite. Verifique sua conexão.");
-    }
-    
+    if (upsertErr) alert("Erro ao salvar.");
     setSaving(null);
   }
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Carregando bolão...</div>;
 
+  // TELA DE SUCESSO FINAL
   if (isFinished) {
     return (
       <div style={{ 
         textAlign: "center", 
-        marginTop: 100, 
-        padding: "0 20px",
+        marginTop: 60, 
+        padding: "0 20px 80px 20px",
         display: 'flex',
         flexDirection: 'column',
-        alignItems: 'center'
+        alignItems: 'center',
+        minHeight: '80vh',
+        justifyContent: 'center'
       }}>
-        <div style={{ fontSize: 80, marginBottom: 20 }}>🏆</div>
-        <h1 style={{ fontSize: 32, marginBottom: 12 }}>Palpites Enviados!</h1>
-        <p style={{ opacity: 0.7, maxWidth: 450, marginBottom: 32, lineHeight: 1.6 }}>
+        {/* IMAGEM PERSONALIZADA */}
+        <div style={{ 
+          marginBottom: 30, 
+          borderRadius: 24, 
+          overflow: 'hidden', 
+          boxShadow: "0 15px 35px rgba(0,0,0,0.4)",
+          border: "1px solid var(--border)"
+        }}>
+          <Image 
+            src="/sebastiana.png" 
+            alt="Sucesso"
+            width={350} 
+            height={250} 
+            style={{ objectFit: 'cover' }}
+            priority
+          />
+        </div>
+
+        <h1 style={{ fontSize: 36, marginBottom: 12 }}>Palpites Enviados!</h1>
+        <p style={{ opacity: 0.7, maxWidth: 450, marginBottom: 40, lineHeight: 1.6 }}>
           Seus votos para o Oscar 2026 foram registrados. 
           Você pode voltar e alterar suas escolhas a qualquer momento.
         </p>
-        <div style={{ display: 'flex', gap: 12 }}>
+
+        <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
+          {/* BOTÃO VOLTAR PARA HOME */}
+          <button
+            onClick={() => router.push("/")}
+            style={{
+              padding: "14px 24px",
+              borderRadius: 12,
+              border: "1px solid var(--border)",
+              background: "var(--card)",
+              cursor: "pointer",
+              color: "var(--text)",
+              fontWeight: 600,
+              display: 'flex',
+              alignItems: 'center',
+              gap: 8
+            }}
+          >
+            🏠 Início
+          </button>
+
           <button
             onClick={() => setIsFinished(false)}
             style={{
@@ -144,15 +177,17 @@ export default function PalpitesPage() {
               border: "1px solid var(--border)",
               background: "var(--card)",
               cursor: "pointer",
-              color: "var(--text)"
+              color: "var(--text)",
+              fontWeight: 600
             }}
           >
             Revisar palpites
           </button>
+          
           <button
             onClick={() => router.push("/oscar-2026/ranking")}
             style={{
-              padding: "14px 24px",
+              padding: "14px 28px",
               borderRadius: 12,
               border: "none",
               background: "linear-gradient(180deg, var(--gold), var(--gold-light))",
@@ -186,7 +221,6 @@ export default function PalpitesPage() {
             border: "1px solid var(--border)" 
           }}>
             <h2 style={{ fontSize: 20, marginBottom: 16, color: "var(--gold)" }}>{cat.name}</h2>
-            
             <div style={{ display: "grid", gap: 12 }}>
               {(nomineesByCategory[cat.id] || []).map((nom) => {
                 const isSelected = predByCat[cat.id] === nom.id;
@@ -218,7 +252,6 @@ export default function PalpitesPage() {
                 );
               })}
             </div>
-            
             <div style={{ marginTop: 12, height: 20, fontSize: 12, color: "var(--gold)", textAlign: "right" }}>
               {saving === cat.id ? "Salvando..." : predByCat[cat.id] ? "Salvo ✅" : ""}
             </div>
