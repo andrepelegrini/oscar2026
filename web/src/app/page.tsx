@@ -6,13 +6,27 @@ import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { getParticipantId, setParticipantId } from "@/lib/participant";
 
+// 1. MOVIDO PARA FORA DO COMPONENTE PRINCIPAL
+const Footer = () => (
+  <footer style={{
+    textAlign: "center",
+    padding: "40px 20px",
+    opacity: 0.5,
+    fontSize: 13,
+    borderTop: "1px solid var(--border)",
+    marginTop: "auto",
+    width: "100%"
+  }}>
+    <p>© {new Date().getFullYear()} André Pelegrini, founder @ Cadenzia. Todos os direitos reservados.</p>
+  </footer>
+);
+
 export default function HomePage() {
   const router = useRouter();
 
   const [name, setName] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // Inicialização preguiçosa (Lazy Initializer)
   const [participantId, setLocalParticipantId] = useState<string | null>(() => {
     if (typeof window !== "undefined") {
       return getParticipantId();
@@ -43,29 +57,14 @@ export default function HomePage() {
     router.push("/oscar-2026/palpites");
   }
 
-  // Componente de Footer para reutilizar nas duas telas
-  const Footer = () => (
-    <footer style={{
-      textAlign: "center",
-      padding: "40px 20px",
-      opacity: 0.5,
-      fontSize: 13,
-      borderTop: "1px solid var(--border)",
-      marginTop: "auto", // Empurra para o fim do container flex
-      width: "100%"
-    }}>
-      <p>© {new Date().getFullYear()} André Pelegrini, founder @ Cadenzia. Todos os direitos reservados.</p>
-    </footer>
-  );
-
-  // Tela de Login (Se não houver ID de participante)
+  // Tela de Login
   if (!participantId) {
     return (
       <AppShell>
         <div style={{ 
           display: "flex", 
           flexDirection: "column", 
-          minHeight: "80vh" // Garante altura para o footer descer
+          minHeight: "80vh" 
         }}>
           <div style={{ maxWidth: 500, margin: "80px auto 40px", padding: "0 20px", flex: 1 }}>
             <h1 style={{ fontSize: 42, marginBottom: 8 }}>Entrar no Bolão</h1>
@@ -115,7 +114,7 @@ export default function HomePage() {
     );
   }
 
-  // Tela de Boas-vindas (Se já existe participante logado)
+  // Tela de Boas-vindas
   return (
     <AppShell>
       <div style={{ 
