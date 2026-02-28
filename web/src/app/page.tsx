@@ -1,273 +1,222 @@
 "use client";
 
-import { useEffect, useMemo, useState } from "react";
-import { useRouter } from "next/navigation";
+import Link from "next/link";
+import { useEffect, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/AppShell";
-import { Card, CardContent, CardHeader } from "@/components/ui/Card";
-import { Badge } from "@/components/ui/Badge";
+import { Card, CardContent } from "@/components/ui/Card";
 
-type EventRow = { id: string };
-type Category = { id: string; name: string };
-type Nominee = { id: string; category_id: string; name: string; film: string | null };
-type Prediction = { category_id: string; nominee_id: string };
+type AdminCheckResponse = { ok: boolean };
 
-function getParticipantId(): string | null {
-  if (typeof window === "undefined") return null;
-  return localStorage.getItem("participant_id");
-}
-
-const DEADLINE = new Date("2026-03-15T17:00:00-03:00");
-
-export default function PalpitesPage() {
-  const router = useRouter();
-
-  const [participantId, setParticipantId] = useState<string | null>(null);
-
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [nominees, setNominees] = useState<Nominee[]>([]);
-  const [selected, setSelected] = useState<Record<string, string>>({}); // category_id -> nominee_id
-
-  const [loading, setLoading] = useState(true);
-  const [savingCat, setSavingCat] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
-
-  const locked = useMemo(() => new Date() > DEADLINE, []);
+export default function HomePage() {
+  const [authed, setAuthed] = useState(false);
+  const [isAdmin, setIsAdmin] = useState(false);
 
   useEffect(() => {
     async function load() {
-      setError(null);
-      setLoading(true);
+      const { data } = await supabase.auth.getSession();
+      const token = data.session?.access_token;
+      setAuthed(Boolean(token));
 
-      const pid = getParticipantId();
-      if (!pid) {
-        router.push("/");
-        return;
-      }
-      setParticipantId(pid);
+      if (!token) return;
 
-      // 1) event
-      const { data: event, error: evErr } = await supabase
-        .from("events")
-        .select("id")
-        .eq("slug", "oscar-2026")
-        .single<EventRow>();
-
-      if (evErr || !event) {
-        setError(evErr?.message ?? "Evento não encontrado");
-        setLoading(false);
-        return;
-      }
-
-      // 2) categories
-      const { data: cats, error: catsErr } = await supabase
-        .from("categories")
-        .select("id,name")
-        .eq("event_id", event.id)
-        .order("sort_order")
-        .returns<Category[]>();
-
-      if (catsErr) {
-        setError(catsErr.message);
-        setLoading(false);
-        return;
-      }
-
-      // 3) nominees
-      const { data: noms, error: nomsErr } = await supabase
-        .from("nominees")
-        .select("id,category_id,name,film")
-        .returns<Nominee[]>();
-
-      if (nomsErr) {
-        setError(nomsErr.message);
-        setLoading(false);
-        return;
-      }
-
-      // 4) existing predictions for participant
-      const { data: preds, error: predsErr } = await supabase
-        .from("predictions")
-        .select("category_id,nominee_id")
-        .eq("participant_id", pid)
-        .returns<Prediction[]>();
-
-      if (predsErr) {
-        setError(predsErr.message);
-        setLoading(false);
-        return;
-      }
-
-      const map: Record<string, string> = {};
-      preds?.forEach((p) => {
-        map[p.category_id] = p.nominee_id;
+      const res = await fetch("/api/admin/check", {
+        headers: { Authorization: `Bearer ${token}` },
       });
-
-      setCategories(cats ?? []);
-      setNominees(noms ?? []);
-      setSelected(map);
-      setLoading(false);
+      const json = (await res.json().catch(() => ({ ok: false }))) as AdminCheckResponse;
+      setIsAdmin(Boolean(json.ok));
     }
 
     load();
-  }, [router]);
-
-  async function savePick(categoryId: string, nomineeId: string) {
-    if (!participantId) return;
-    if (locked) return;
-
-    setError(null);
-    setSavingCat(categoryId);
-
-    // atualiza UI otimista
-    setSelected((prev) => ({ ...prev, [categoryId]: nomineeId }));
-
-    const { error: upsertErr } = await supabase
-      .from("predictions")
-      .upsert(
-        {
-          participant_id: participantId,
-          category_id: categoryId,
-          nominee_id: nomineeId,
-        },
-        { onConflict: "participant_id,category_id" }
-      );
-
-    if (upsertErr) {
-      // desfaz UI se falhar
-      setSelected((prev) => {
-        const copy = { ...prev };
-        delete copy[categoryId];
-        return copy;
-      });
-      setError(upsertErr.message);
-    }
-
-    setSavingCat(null);
-  }
-
-  if (loading) {
-    return (
-      <AppShell title="Palpites" subtitle="Carregando categorias...">
-        <div />
-      </AppShell>
-    );
-  }
+  }, []);
 
   return (
-    <AppShell
-      title="Palpites"
-      subtitle={
-        locked
-          ? "Palpites encerrados. Agora é só aguardar os vencedores."
-          : "Escolha um vencedor por categoria. Você pode alterar até o deadline."
-      }
-    >
-      <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 18 }}>
-        <Badge>
-          Deadline: {formatDeadline(DEADLINE)}
-        </Badge>
-        <Badge>
-          Status: {locked ? "Encerrado" : "Aberto"}
-        </Badge>
-      </div>
+    <AppShell>
+      <section className="hero">
+        <div className="heroGrid">
+          <div>
+            <div className="heroKicker">• 2026 •</div>
+            <h1 className="heroTitle">Bolão do Óscar</h1>
+            <p className="heroSubtitle">
+              Faça seus palpites e acompanhe o ranking ao vivo durante o grande dia.
+            </p>
 
-      {error && (
-        <div
-          style={{
-            marginBottom: 16,
-            padding: 12,
-            border: "1px solid rgba(155,36,53,0.7)",
-            borderRadius: 12,
-            background: "rgba(110,15,30,0.18)",
-          }}
-        >
-          <b>Erro:</b> {error}
-        </div>
-      )}
+            <div className="heroActions">
+              {!authed ? (
+                <Link className="heroBtn primary" href="/login">
+                  Entrar e participar
+                  <span className="hint">Login rápido</span>
+                </Link>
+              ) : (
+                <Link className="heroBtn primary" href="/oscar-2026/palpites">
+                  Fazer meus palpites
+                  <span className="hint">Abrir categorias</span>
+                </Link>
+              )}
 
-      <div style={{ display: "grid", gap: 14 }}>
-        {categories.map((cat) => {
-          const catNominees = nominees.filter((n) => n.category_id === cat.id);
+              <Link className="heroBtn ghost" href="/oscar-2026/ranking">
+                Ver ranking
+                <span className="hint">Pontuação ao vivo</span>
+              </Link>
 
-          return (
-            <Card key={cat.id}>
-              <CardHeader>
-                <div style={{ display: "flex", justifyContent: "space-between", gap: 12, alignItems: "baseline" }}>
-                  <h2 style={{ margin: 0, fontSize: 18 }}>{cat.name}</h2>
-                  <span style={{ fontSize: 12, color: "var(--text-muted)" }}>
-                    {savingCat === cat.id ? "Salvando..." : selected[cat.id] ? "Selecionado ✓" : ""}
-                  </span>
-                </div>
-              </CardHeader>
+              {isAdmin && (
+                <Link className="heroBtn danger" href="/oscar-2026/admin">
+                  Admin: lançar vencedores
+                  <span className="hint">Somente você</span>
+                </Link>
+              )}
+            </div>
+          </div>
 
+          <div className="heroPoster">
+            <Card>
               <CardContent>
-                <div style={{ display: "grid", gap: 10 }}>
-                  {catNominees.map((n) => {
-                    const label = n.film ? `${n.name} — ${n.film}` : n.name;
-                    const checked = selected[cat.id] === n.id;
-
-                    return (
-                      <label
-                        key={n.id}
-                        style={{
-                          display: "flex",
-                          gap: 10,
-                          alignItems: "center",
-                          padding: "10px 12px",
-                          borderRadius: 14,
-                          border: checked ? "1px solid var(--border)" : "1px solid rgba(212,175,55,0.12)",
-                          background: checked ? "rgba(212,175,55,0.08)" : "rgba(255,255,255,0.01)",
-                          cursor: locked ? "not-allowed" : "pointer",
-                          opacity: locked ? 0.65 : 1,
-                          transition: "transform .08s ease, background .12s ease, border-color .12s ease",
-                        }}
-                        onMouseEnter={(e) => {
-                          if (locked) return;
-                          (e.currentTarget as HTMLLabelElement).style.transform = "translateY(-1px)";
-                        }}
-                        onMouseLeave={(e) => {
-                          (e.currentTarget as HTMLLabelElement).style.transform = "translateY(0px)";
-                        }}
-                      >
-                        <input
-                          type="radio"
-                          name={`cat-${cat.id}`}
-                          checked={checked}
-                          disabled={locked || savingCat === cat.id}
-                          onChange={() => savePick(cat.id, n.id)}
-                        />
-                        <span>{label}</span>
-                      </label>
-                    );
-                  })}
+                <div className="posterInner">
+                  <div className="posterFrame" />
+                  <img
+                    src="/oscar.png"
+                    alt="Estatueta do Oscar"
+                    style={{ width: "min(240px, 60%)", height: "auto", filter: "drop-shadow(0 20px 40px rgba(0,0,0,0.55))" }}
+                  />
+                  <div className="posterText">
+                    <div className="posterTop">THE ACADEMY</div>
+                    <div className="posterBig">OSCAR</div>
+                    <div className="posterBottom">BOLÃO • 2026</div>
+                  </div>
                 </div>
-
-                {locked && (
-                  <p style={{ marginTop: 12, color: "var(--text-muted)", fontSize: 13 }}>
-                    Edições bloqueadas após o deadline.
-                  </p>
-                )}
               </CardContent>
             </Card>
-          );
-        })}
-      </div>
-
-      <div style={{ marginTop: 28, textAlign: "center", color: "var(--text-muted)", fontSize: 13 }}>
-        Dica: seu acesso fica salvo neste dispositivo. Se abrir em outro navegador/celular, você cria um novo participante.
-      </div>
+          </div>
+        </div>
+      </section>
+      <footer className="siteFooter">
+        © {new Date().getFullYear()} André Pelegrini, founder @ Cadenzia. Todos os direitos reservados.
+      </footer>
     </AppShell>
   );
 }
 
-function formatDeadline(d: Date) {
-  // formato pt-BR simples, sem depender de libs
-  const pad = (n: number) => String(n).padStart(2, "0");
-  const yyyy = d.getFullYear();
-  const mm = pad(d.getMonth() + 1);
-  const dd = pad(d.getDate());
-  const hh = pad(d.getHours());
-  const mi = pad(d.getMinutes());
-  return `${dd}/${mm}/${yyyy} ${hh}:${mi} (GMT-3)`;
+/**
+ * Estatueta em SVG dourado (estilo “foto/ilustração” Art Deco).
+ * Se você quiser trocar por uma foto real depois: basta colocar um <img src="/oscar.png" .../>
+ * e salvar a imagem em web/public/oscar.png
+ */
+function OscarStatuette() {
+  return (
+    <svg
+      className="oscarSvg"
+      viewBox="0 0 220 520"
+      role="img"
+      aria-label="Estatueta do Oscar"
+    >
+      <defs>
+        <linearGradient id="goldGrad" x1="0" y1="0" x2="1" y2="1">
+          <stop offset="0" stopColor="var(--gold-light)" />
+          <stop offset="0.45" stopColor="var(--gold)" />
+          <stop offset="1" stopColor="#9C7A1F" />
+        </linearGradient>
+        <radialGradient id="shine" cx="35%" cy="20%" r="70%">
+          <stop offset="0" stopColor="rgba(255,255,255,0.45)" />
+          <stop offset="0.35" stopColor="rgba(255,255,255,0.10)" />
+          <stop offset="1" stopColor="rgba(255,255,255,0)" />
+        </radialGradient>
+      </defs>
+
+      {/* base */}
+      <path
+        d="M55 455c0-25 14-40 55-40s55 15 55 40v18H55v-18z"
+        fill="url(#goldGrad)"
+        opacity="0.92"
+      />
+      <path
+        d="M42 473h136c4 0 7 3 7 7v22c0 10-8 18-18 18H53c-10 0-18-8-18-18v-22c0-4 3-7 7-7z"
+        fill="url(#goldGrad)"
+      />
+      <path
+        d="M58 470h104"
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth="3"
+        opacity="0.35"
+      />
+
+      {/* body silhouette */}
+      <path
+        d="M110 28
+           c20 0 34 16 34 36
+           c0 12-5 22-12 28
+           c18 20 28 44 26 70
+           c-2 28-17 48-25 65
+           c-6 13-5 31 3 47
+           c8 16 10 33 6 51
+           c-7 32-23 55-26 83
+           c-2 18 5 39 10 57
+           c2 7-2 14-9 16
+           c-19 5-41 5-60 0
+           c-7-2-11-9-9-16
+           c5-18 12-39 10-57
+           c-3-28-19-51-26-83
+           c-4-18-2-35 6-51
+           c8-16 9-34 3-47
+           c-8-17-23-37-25-65
+           c-2-26 8-50 26-70
+           c-7-6-12-16-12-28
+           c0-20 14-36 34-36z"
+        fill="url(#goldGrad)"
+      />
+
+      {/* shine overlay */}
+      <path
+        d="M110 28
+           c20 0 34 16 34 36
+           c0 12-5 22-12 28
+           c18 20 28 44 26 70
+           c-2 28-17 48-25 65
+           c-6 13-5 31 3 47
+           c8 16 10 33 6 51
+           c-7 32-23 55-26 83
+           c-2 18 5 39 10 57
+           c2 7-2 14-9 16
+           c-19 5-41 5-60 0
+           c-7-2-11-9-9-16
+           c5-18 12-39 10-57
+           c-3-28-19-51-26-83
+           c-4-18-2-35 6-51
+           c8-16 9-34 3-47
+           c-8-17-23-37-25-65
+           c-2-26 8-50 26-70
+           c-7-6-12-16-12-28
+           c0-20 14-36 34-36z"
+        fill="url(#shine)"
+        opacity="0.75"
+      />
+
+      {/* small outline */}
+      <path
+        d="M110 28
+           c20 0 34 16 34 36
+           c0 12-5 22-12 28
+           c18 20 28 44 26 70
+           c-2 28-17 48-25 65
+           c-6 13-5 31 3 47
+           c8 16 10 33 6 51
+           c-7 32-23 55-26 83
+           c-2 18 5 39 10 57
+           c2 7-2 14-9 16
+           c-19 5-41 5-60 0
+           c-7-2-11-9-9-16
+           c5-18 12-39 10-57
+           c-3-28-19-51-26-83
+           c-4-18-2-35 6-51
+           c8-16 9-34 3-47
+           c-8-17-23-37-25-65
+           c-2-26 8-50 26-70
+           c-7-6-12-16-12-28
+           c0-20 14-36 34-36z"
+        fill="none"
+        stroke="rgba(0,0,0,0.25)"
+        strokeWidth="3"
+        opacity="0.35"
+      />
+    </svg>
+  );
 }
