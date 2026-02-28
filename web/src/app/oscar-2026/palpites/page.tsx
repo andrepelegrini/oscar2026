@@ -42,74 +42,44 @@ export default function PalpitesPage() {
       setError(null);
       setLoading(true);
 
-      // 1) PEGA O ID DO PARTICIPANTE (SEM LOGIN/SENHA)
       const pId = getParticipantId();
       if (!pId) {
-        router.push("/"); // Se não tem ID, volta para a home para "entrar"
+        router.push("/");
         return;
       }
 
-      // 2) carregar evento
-      const ev = await supabase
+      // 1. Carregar evento
+      const { data: ev, error: evErr } = await supabase
         .from("events")
         .select("id,slug,deadline_at")
         .eq("slug", "oscar-2026")
-        .single<EventRow>();
+        .single();
 
-      if (ev.error) {
-        setError(ev.error.message);
+      if (evErr) {
+        setError("Evento não encontrado.");
         setLoading(false);
         return;
       }
 
-      // 3) carregar categorias
-      const cats = await supabase
-        .from("categories")
-        .select("id,name,weight,sort_order")
-        .eq("event_id", ev.data.id)
-        .order("sort_order", { ascending: true })
-        .returns<CategoryRow[]>();
+      // 2. Carregar categorias e indicados em paralelo para performance
+      const [catsRes, nomsRes, predsRes] = await Promise.all([
+        supabase.from("categories").select("*").eq("event_id", ev.id).order("sort_order"),
+        supabase.from("nominees").select("*"),
+        supabase.from("predictions").select("category_id,nominee_id").eq("event_id", ev.id).eq("user_id", pId)
+      ]);
 
-      if (cats.error) {
-        setError(cats.error.message);
-        setLoading(false);
-        return;
-      }
-
-      // 4) carregar nominees
-      const catIds = cats.data.map((c) => c.id);
-      const noms = await supabase
-        .from("nominees")
-        .select("id,category_id,name,film")
-        .in("category_id", catIds)
-        .returns<NomineeRow[]>();
-
-      if (noms.error) {
-        setError(noms.error.message);
-        setLoading(false);
-        return;
-      }
-
-      // 5) carregar palpites usando o participant_id do seu storage
-      const preds = await supabase
-        .from("predictions")
-        .select("category_id,nominee_id")
-        .eq("event_id", ev.data.id)
-        .eq("participant_id", pId) // Filtro alterado aqui
-        .returns<PredictionRow[]>();
-
-      if (preds.error) {
-        setError(preds.error.message);
+      if (catsRes.error || nomsRes.error || predsRes.error) {
+        setError("Erro ao carregar dados do banco.");
         setLoading(false);
         return;
       }
 
       const predMap: Record<string, string> = {};
-      for (const p of preds.data) predMap[p.category_id] = p.nominee_id;
+      predsRes.data.forEach(p => predMap[p.category_id] = p.nominee_id);
 
-      setEvent(ev.data);
-      setCategories(cats.data);
-      setNominees(noms.data);
+      setEvent(ev);
+      setCategories(catsRes.data);
+      setNominees(nomsRes.data);
       setPredByCat(predMap);
       setLoading(false);
     }
@@ -118,106 +88,92 @@ export default function PalpitesPage() {
   }, [router]);
 
   async function choose(categoryId: string, nomineeId: string) {
-    if (!event) return;
+    if (!event || isLocked) return;
 
     const pId = getParticipantId();
-    if (!pId) {
-      router.push("/");
-      return;
-    }
+    if (!pId) return router.push("/");
 
-    setError(null);
     setSaving(categoryId);
-
-    // Otimista na UI
-    setPredByCat((prev) => ({ ...prev, [categoryId]: nomineeId }));
+    // Update local state (optimistic)
+    setPredByCat(prev => ({ ...prev, [categoryId]: nomineeId }));
 
     const { error: upsertErr } = await supabase.from("predictions").upsert(
       {
         event_id: event.id,
-        participant_id: pId, // Usando pId em vez de user.id
+        user_id: pId, // Aqui usamos o seu UUID do participante na coluna user_id
         category_id: categoryId,
         nominee_id: nomineeId,
       },
-      { onConflict: "event_id,participant_id,category_id" } // Ajuste o conflito se necessário
+      { onConflict: "event_id,user_id,category_id" } // O banco precisa de um unique index nessas 3 colunas
     );
-
-    setSaving(null);
 
     if (upsertErr) {
-      setError(upsertErr.message);
+      console.error(upsertErr);
+      alert("Erro ao salvar palpite. Verifique sua conexão.");
     }
+    
+    setSaving(null);
   }
 
-  if (loading) return <main style={{ padding: 24 }}>Carregando seus palpites...</main>;
-
-  if (error) {
-    return (
-      <main style={{ padding: 24, maxWidth: 720, margin: "0 auto" }}>
-        <h1 style={{ fontSize: 24, marginBottom: 12 }}>Erro</h1>
-        <p style={{ color: "crimson" }}>{error}</p>
-        <button onClick={() => window.location.reload()}>Tentar novamente</button>
-      </main>
-    );
-  }
+  if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Carregando bolão...</div>;
 
   return (
-    <main style={{ padding: 24, maxWidth: 920, margin: "0 auto" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 30 }}>
-        <div>
-          <h1 style={{ fontSize: 28, marginBottom: 6 }}>Meus palpites 🎬</h1>
-          {event && (
-            <p style={{ opacity: 0.8 }}>
-              Deadline: <b>{new Date(event.deadline_at).toLocaleString("pt-BR")}</b>
-              {isLocked ? " — palpites bloqueados ✅" : " — em aberto"}
-            </p>
-          )}
-        </div>
-        <a href="/oscar-2026/ranking" style={{ color: 'var(--gold)' }}>Ver ranking →</a>
+    <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 20px" }}>
+      <header style={{ marginBottom: 40 }}>
+        <h1 style={{ fontSize: 32 }}>Meus Palpites 🏆</h1>
+        <p style={{ opacity: 0.7 }}>
+          {isLocked ? "🔒 Votação encerrada" : "Sua escolha é salva automaticamente."}
+        </p>
       </header>
 
-      <div style={{ display: "grid", gap: 18 }}>
-        {categories.map((c) => {
-          const selected = predByCat[c.id] ?? null;
-          const list = nomineesByCategory[c.id] ?? [];
-
-          return (
-            <section key={c.id} style={{ padding: 20, border: "1px solid var(--border)", borderRadius: 16, background: "var(--card)" }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: 'center' }}>
-                <h2 style={{ fontSize: 18, margin: 0 }}>{c.name}</h2>
-                <span style={{ opacity: 0.6, fontSize: 14 }}>Peso {c.weight}</span>
-              </div>
-
-              <div style={{ marginTop: 16, display: "grid", gap: 10 }}>
-                {list.map((n) => (
-                  <label key={n.id} style={{ 
-                    display: "flex", 
-                    gap: 12, 
-                    alignItems: "center", 
-                    padding: 12, 
-                    borderRadius: 8, 
-                    background: selected === n.id ? "rgba(255,215,0,0.1)" : "transparent",
-                    cursor: isLocked ? "default" : "pointer"
+      <div style={{ display: "grid", gap: 24 }}>
+        {categories.map((cat) => (
+          <section key={cat.id} style={{ 
+            padding: 24, 
+            borderRadius: 16, 
+            background: "var(--card)", 
+            border: "1px solid var(--border)" 
+          }}>
+            <h2 style={{ fontSize: 20, marginBottom: 16, color: "var(--gold)" }}>{cat.name}</h2>
+            
+            <div style={{ display: "grid", gap: 12 }}>
+              {(nomineesByCategory[cat.id] || []).map((nom) => {
+                const isSelected = predByCat[cat.id] === nom.id;
+                return (
+                  <label key={nom.id} style={{
+                    display: "flex",
+                    alignItems: "center",
+                    gap: 12,
+                    padding: 16,
+                    borderRadius: 12,
+                    border: "1px solid",
+                    borderColor: isSelected ? "var(--gold)" : "transparent",
+                    background: isSelected ? "rgba(212, 175, 55, 0.1)" : "rgba(255,255,255,0.03)",
+                    cursor: isLocked ? "default" : "pointer",
+                    transition: "all 0.2s"
                   }}>
                     <input
                       type="radio"
-                      name={c.id}
-                      checked={selected === n.id}
-                      disabled={isLocked || saving === c.id}
-                      onChange={() => choose(c.id, n.id)}
+                      checked={isSelected}
+                      disabled={isLocked || saving === cat.id}
+                      onChange={() => choose(cat.id, nom.id)}
+                      style={{ accentColor: "var(--gold)" }}
                     />
-                    <span>{n.film ? `${n.name} — ${n.film}` : n.name}</span>
+                    <div>
+                      <div style={{ fontWeight: isSelected ? 600 : 400 }}>{nom.name}</div>
+                      {nom.film && <div style={{ fontSize: 13, opacity: 0.6 }}>{nom.film}</div>}
+                    </div>
                   </label>
-                ))}
-              </div>
-              
-              <div style={{ marginTop: 12, fontSize: 12, textAlign: 'right', color: 'var(--gold)' }}>
-                {saving === c.id ? "Salvando..." : selected ? "Palpite salvo" : "Aguardando escolha"}
-              </div>
-            </section>
-          );
-        })}
+                );
+              })}
+            </div>
+            
+            <div style={{ marginTop: 12, height: 20, fontSize: 12, color: "var(--gold)", textAlign: "right" }}>
+              {saving === cat.id && "Salvando..."}
+            </div>
+          </section>
+        ))}
       </div>
-    </main>
+    </div>
   );
 }
