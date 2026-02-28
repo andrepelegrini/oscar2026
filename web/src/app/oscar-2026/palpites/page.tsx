@@ -3,12 +3,13 @@
 import { useEffect, useMemo, useState, useCallback } from "react";
 import { supabase } from "@/lib/supabase/client";
 
-// Tipagens baseadas na sua estrutura de banco
+// Tipagens
 type EventRow = { id: string; slug: string; deadline_at: string };
 type CategoryRow = { id: string; name: string; weight: number; sort_order: number };
 type NomineeRow = { id: string; category_id: string; name: string; film: string | null };
 type PredictionRow = { category_id: string; nominee_id: string; user_id: string };
 
+// Helper estável
 function getParticipantId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("participant_id");
@@ -24,6 +25,7 @@ export default function PalpitesPage() {
   const [nominees, setNominees] = useState<NomineeRow[]>([]);
   const [predByCat, setPredByCat] = useState<Record<string, string>>({});
 
+  // Memoização para evitar re-processamento
   const nomineesByCategory = useMemo(() => {
     const map: Record<string, NomineeRow[]> = {};
     for (const n of nominees) {
@@ -40,10 +42,15 @@ export default function PalpitesPage() {
     return new Date() >= new Date(event.deadline_at);
   }, [event]);
 
-  // Carregamento inicial corrigido para o Vercel
+  /**
+   * SOLUÇÃO PARA O ERRO DO VERCEL:
+   * Não usamos um estado (useState) para o ID. 
+   * Lemos o ID do localStorage diretamente aqui dentro.
+   */
   const loadInitialData = useCallback(async () => {
-    const pId = getParticipantId();
-    if (!pId) {
+    const currentUserId = getParticipantId();
+    
+    if (!currentUserId) {
       window.location.href = "/";
       return;
     }
@@ -59,9 +66,9 @@ export default function PalpitesPage() {
         .eq("slug", "oscar-2026")
         .single();
 
-      if (evErr || !ev) throw new Error(evErr?.message || "Evento não encontrado.");
+      if (evErr || !ev) throw new Error("Evento não encontrado.");
 
-      // 2. Busca categorias e palpites (Note o uso de user_id aqui)
+      // 2. Busca categorias e os palpites do user_id
       const [catsRes, predsRes] = await Promise.all([
         supabase
           .from("categories")
@@ -72,7 +79,7 @@ export default function PalpitesPage() {
           .from("predictions")
           .select("category_id, nominee_id")
           .eq("event_id", ev.id)
-          .eq("user_id", pId) // Ajustado para sua coluna user_id
+          .eq("user_id", currentUserId) // Usando a variável local
       ]);
 
       if (catsRes.error) throw catsRes.error;
@@ -113,15 +120,11 @@ export default function PalpitesPage() {
     loadInitialData();
   }, [loadInitialData]);
 
-  // Função de votação com mapeamento correto de colunas
   async function handleVote(categoryId: string, nomineeId: string) {
     if (!event || isLocked || saving === categoryId) return;
 
-    const pId = getParticipantId();
-    if (!pId) {
-        window.location.href = "/";
-        return;
-    }
+    const currentUserId = getParticipantId();
+    if (!currentUserId) return;
 
     const previousChoice = predByCat[categoryId];
     
@@ -132,11 +135,11 @@ export default function PalpitesPage() {
     const { error: upsertErr } = await supabase.from("predictions").upsert(
       {
         event_id: event.id,
-        user_id: pId, // Aqui usamos user_id para bater com seu banco
+        user_id: currentUserId,
         category_id: categoryId,
         nominee_id: nomineeId,
       },
-      { onConflict: "event_id,user_id,category_id" } // Ajustado onConflict também
+      { onConflict: "event_id,user_id,category_id" }
     );
 
     if (upsertErr) {
@@ -150,13 +153,12 @@ export default function PalpitesPage() {
   if (loading) return <main style={{ padding: 40, textAlign: "center" }}>Carregando...</main>;
 
   return (
-    <main style={{ padding: "24px", maxWidth: "800px", margin: "0 auto", fontFamily: "sans-serif" }}>
-      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between" }}>
-        <div>
-          <h1 style={{ fontSize: "24px", margin: "0" }}>Meus Palpites</h1>
-          {event && <p style={{ opacity: 0.6, fontSize: "14px" }}>Prazo: {new Date(event.deadline_at).toLocaleString("pt-BR")}</p>}
-        </div>
-        <a href="/oscar-2026/ranking" style={{ color: "#0070f3", fontSize: "14px" }}>Ranking →</a>
+    <main style={{ padding: "24px", maxWidth: "800px", margin: "0 auto" }}>
+      <header style={{ marginBottom: 32 }}>
+        <h1 style={{ fontSize: "24px" }}>Meus Palpites</h1>
+        {event && (
+          <p style={{ opacity: 0.6 }}>Prazo: {new Date(event.deadline_at).toLocaleString("pt-BR")}</p>
+        )}
       </header>
 
       {error && <div style={{ color: "red", marginBottom: 20 }}>{error}</div>}
@@ -167,7 +169,7 @@ export default function PalpitesPage() {
             <h2 style={{ fontSize: "18px", marginBottom: 16 }}>{cat.name}</h2>
             <div style={{ display: "grid", gap: 10 }}>
               {(nomineesByCategory[cat.id] || []).map((nom) => (
-                <label key={nom.id} style={{ display: "flex", gap: 10, cursor: isLocked ? "default" : "pointer" }}>
+                <label key={nom.id} style={{ display: "flex", gap: 10, cursor: "pointer" }}>
                   <input 
                     type="radio" 
                     checked={predByCat[cat.id] === nom.id}
@@ -177,9 +179,6 @@ export default function PalpitesPage() {
                   <span>{nom.name} {nom.film && <small style={{ opacity: 0.5 }}>— {nom.film}</small>}</span>
                 </label>
               ))}
-            </div>
-            <div style={{ marginTop: 10, fontSize: "12px", color: "#999" }}>
-              {saving === cat.id ? "Salvando..." : predByCat[cat.id] ? "✓ Salvo" : "Aguardando palpite"}
             </div>
           </section>
         ))}
