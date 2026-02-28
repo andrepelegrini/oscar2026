@@ -8,6 +8,7 @@ type CategoryRow = { id: string; name: string; weight: number; sort_order: numbe
 type NomineeRow = { id: string; category_id: string; name: string; film: string | null };
 type PredictionRow = { category_id: string; nominee_id: string };
 
+// Helper para ler o localStorage com segurança no lado do cliente
 function getParticipantId(): string | null {
   if (typeof window === "undefined") return null;
   return localStorage.getItem("participant_id");
@@ -23,27 +24,30 @@ export default function PalpitesPage() {
   const [nominees, setNominees] = useState<NomineeRow[]>([]);
   const [predByCat, setPredByCat] = useState<Record<string, string>>({});
 
-  // Memoiza os indicados por categoria para performance
+  // Organiza indicados por categoria de forma eficiente
   const nomineesByCategory = useMemo(() => {
     const map: Record<string, NomineeRow[]> = {};
-    nominees.forEach((n) => {
+    for (const n of nominees) {
       (map[n.category_id] ??= []).push(n);
-    });
-    Object.keys(map).forEach((k) => {
+    }
+    for (const k of Object.keys(map)) {
       map[k].sort((a, b) => a.name.localeCompare(b.name));
-    });
+    }
     return map;
   }, [nominees]);
 
-  // Bloqueio lógico (segurança básica no client)
+  // Bloqueio visual baseado no deadline
   const isLocked = useMemo(() => {
     if (!event) return false;
     return new Date() >= new Date(event.deadline_at);
   }, [event]);
 
-  const loadData = useCallback(async () => {
-    const participantId = getParticipantId();
-    if (!participantId) {
+  // Função central de carregamento (Consolidada para evitar erros de ESLint)
+  const loadInitialData = useCallback(async () => {
+    const pId = getParticipantId();
+    
+    // Se não houver ID, redireciona para a home
+    if (!pId) {
       window.location.href = "/";
       return;
     }
@@ -52,44 +56,57 @@ export default function PalpitesPage() {
       setLoading(true);
       setError(null);
 
-      // 1. Carregar Evento
+      // 1. Busca o evento
       const { data: ev, error: evErr } = await supabase
         .from("events")
         .select("id, slug, deadline_at")
         .eq("slug", "oscar-2026")
         .single();
 
-      if (evErr || !ev) throw new Error(evErr?.message || "Evento não encontrado");
+      if (evErr || !ev) throw new Error(evErr?.message || "Evento não encontrado.");
 
-      // 2. Carregar Categorias e Indicados em paralelo (Melhora performance)
-      const [catsRes, nomsRes, predsRes] = await Promise.all([
+      // 2. Busca categorias e palpites em paralelo
+      const [catsRes, predsRes] = await Promise.all([
         supabase
           .from("categories")
           .select("id, name, weight, sort_order")
           .eq("event_id", ev.id)
           .order("sort_order", { ascending: true }),
         supabase
-          .from("nominees")
-          .select("id, category_id, name, film")
-          .in("category_id", (await supabase.from("categories").select("id").eq("event_id", ev.id)).data?.map(c => c.id) || []),
-        supabase
           .from("predictions")
           .select("category_id, nominee_id")
           .eq("event_id", ev.id)
-          .eq("participant_id", participantId)
+          .eq("participant_id", pId)
       ]);
 
       if (catsRes.error) throw catsRes.error;
-      if (nomsRes.error) throw nomsRes.error;
       if (predsRes.error) throw predsRes.error;
 
-      // Montar mapa de palpites
-      const predMap: Record<string, string> = {};
-      predsRes.data.forEach((p) => (predMap[p.category_id] = p.nominee_id));
+      const catsData = catsRes.data || [];
+      const catIds = catsData.map((c) => c.id);
 
+      // 3. Busca indicados (somente se houver categorias)
+      let nomsData: NomineeRow[] = [];
+      if (catIds.length > 0) {
+        const { data: noms, error: nomsErr } = await supabase
+          .from("nominees")
+          .select("id, category_id, name, film")
+          .in("category_id", catIds);
+        
+        if (nomsErr) throw nomsErr;
+        nomsData = noms || [];
+      }
+
+      // 4. Mapeia os palpites existentes
+      const predMap: Record<string, string> = {};
+      predsRes.data?.forEach((p) => {
+        predMap[p.category_id] = p.nominee_id;
+      });
+
+      // Atualiza os estados de uma vez só
       setEvent(ev);
-      setCategories(catsRes.data || []);
-      setNominees(nomsRes.data || []);
+      setCategories(catsData);
+      setNominees(nomsData);
       setPredByCat(predMap);
     } catch (err: any) {
       setError(err.message);
@@ -99,31 +116,30 @@ export default function PalpitesPage() {
   }, []);
 
   useEffect(() => {
-    loadData();
-  }, [loadData]);
+    loadInitialData();
+  }, [loadInitialData]);
 
-  async function choose(categoryId: string, nomineeId: string) {
+  // Função para salvar palpite (com rollback em caso de erro)
+  async function handleVote(categoryId: string, nomineeId: string) {
     if (!event || isLocked || saving === categoryId) return;
 
-    const participantId = getParticipantId();
-    if (!participantId) {
+    const pId = getParticipantId();
+    if (!pId) {
       window.location.href = "/";
       return;
     }
 
-    // Guardar estado anterior para rollback em caso de erro
-    const previousNomineeId = predByCat[categoryId];
-
+    const previousChoice = predByCat[categoryId];
+    
+    // Update otimista
     setError(null);
     setSaving(categoryId);
-
-    // Update Otimista (UI responde na hora)
     setPredByCat((prev) => ({ ...prev, [categoryId]: nomineeId }));
 
     const { error: upsertErr } = await supabase.from("predictions").upsert(
       {
         event_id: event.id,
-        participant_id: participantId,
+        participant_id: pId,
         category_id: categoryId,
         nominee_id: nomineeId,
       },
@@ -131,90 +147,96 @@ export default function PalpitesPage() {
     );
 
     if (upsertErr) {
-      setError(`Falha ao salvar: ${upsertErr.message}`);
-      // REVERTE o estado se o servidor falhar
-      setPredByCat((prev) => ({ ...prev, [categoryId]: previousNomineeId }));
+      setError(`Erro ao salvar: ${upsertErr.message}`);
+      // Reverte para o palpite anterior
+      setPredByCat((prev) => ({ ...prev, [categoryId]: previousChoice }));
     }
 
     setSaving(null);
   }
 
-  if (loading) return <main style={{ padding: 24, textAlign: "center" }}>Carregando categorias...</main>;
+  if (loading) {
+    return (
+      <main style={{ padding: 40, textAlign: "center", fontFamily: "sans-serif" }}>
+        <p>Carregando seus palpites...</p>
+      </main>
+    );
+  }
 
   return (
-    <main style={{ padding: 24, maxWidth: 920, margin: "0 auto", minHeight: "100vh" }}>
-      <header style={{ display: "flex", justifyContent: "space-between", gap: 12, flexWrap: "wrap", marginBottom: 32 }}>
+    <main style={{ padding: "24px", maxWidth: "800px", margin: "0 auto", fontFamily: "sans-serif" }}>
+      <header style={{ marginBottom: 32, display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
         <div>
-          <h1 style={{ fontSize: 28, marginBottom: 6 }}>Meus palpites</h1>
+          <h1 style={{ fontSize: "24px", margin: "0 0 8px 0" }}>Oscar 2026</h1>
           {event && (
-            <p style={{ opacity: 0.8 }}>
-              Deadline: <b>{new Date(event.deadline_at).toLocaleString("pt-BR")}</b>
-              {isLocked ? " — palpites encerrados ✅" : " — aberto para votação"}
+            <p style={{ fontSize: "14px", opacity: 0.7, margin: 0 }}>
+              Deadline: {new Date(event.deadline_at).toLocaleString("pt-BR")} 
+              {isLocked ? " (Encerrado)" : " (Aberto)"}
             </p>
           )}
         </div>
-        <a href="/oscar-2026/ranking" style={{ color: "#0070f3", textDecoration: "none" }}>Ver ranking →</a>
+        <a href="/oscar-2026/ranking" style={{ fontSize: "14px", color: "#0070f3" }}>Ver Ranking</a>
       </header>
 
       {error && (
-        <div style={{ padding: 16, backgroundColor: "#fff5f5", color: "#c00", borderRadius: 8, marginBottom: 20, border: "1px solid #ffcaca" }}>
-          <b>Erro:</b> {error}
+        <div style={{ padding: 12, backgroundColor: "#fff0f0", color: "#d00", borderRadius: 8, marginBottom: 24, fontSize: "14px" }}>
+          {error}
         </div>
       )}
 
       {isLocked && (
-        <div style={{ marginBottom: 24, padding: 16, backgroundColor: "#111", color: "#eee", borderRadius: 12, textAlign: "center" }}>
-          🔒 O prazo expirou. Os palpites agora são apenas para visualização.
+        <div style={{ padding: 12, backgroundColor: "#f0f0f0", borderRadius: 8, marginBottom: 24, textAlign: "center", fontSize: "14px" }}>
+          🔒 As votações foram encerradas.
         </div>
       )}
 
-      <div style={{ display: "grid", gap: 20 }}>
-        {categories.map((c) => {
-          const selectedId = predByCat[c.id] || null;
-          const list = nomineesByCategory[c.id] || [];
+      <div style={{ display: "grid", gap: 24 }}>
+        {categories.map((cat) => {
+          const selectedNomineeId = predByCat[cat.id];
+          const options = nomineesByCategory[cat.id] || [];
 
           return (
-            <section key={c.id} style={{ padding: 20, border: "1px solid #333", borderRadius: 16, backgroundColor: saving === c.id ? "#fafafa" : "transparent", transition: "0.2s" }}>
+            <section key={cat.id} style={{ padding: 20, border: "1px solid #eee", borderRadius: 12 }}>
               <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
-                <h2 style={{ fontSize: 18, margin: 0 }}>{c.name}</h2>
-                <span style={{ fontSize: 14, opacity: 0.6 }}>Peso {c.weight}</span>
+                <h2 style={{ fontSize: "18px", margin: 0 }}>{cat.name}</h2>
+                <span style={{ fontSize: "12px", opacity: 0.5 }}>Peso {cat.weight}</span>
               </div>
 
-              <div style={{ display: "grid", gap: 10 }}>
-                {list.map((n) => {
-                  const isChecked = selectedId === n.id;
+              <div style={{ display: "grid", gap: 8 }}>
+                {options.map((nom) => {
+                  const active = selectedNomineeId === nom.id;
                   return (
                     <label 
-                      key={n.id} 
+                      key={nom.id} 
                       style={{ 
                         display: "flex", 
-                        gap: 12, 
-                        alignItems: "center", 
-                        cursor: isLocked || saving === c.id ? "not-allowed" : "pointer",
-                        padding: "8px 12px",
-                        borderRadius: 8,
-                        backgroundColor: isChecked ? "#f0f7ff" : "transparent",
-                        border: isChecked ? "1px solid #0070f3" : "1px solid transparent"
+                        padding: "10px", 
+                        borderRadius: "8px", 
+                        border: "1px solid", 
+                        borderColor: active ? "#0070f3" : "#eee",
+                        backgroundColor: active ? "#f0f7ff" : "transparent",
+                        cursor: isLocked || saving === cat.id ? "not-allowed" : "pointer",
+                        alignItems: "center",
+                        gap: "10px"
                       }}
                     >
-                      <input
-                        type="radio"
-                        name={c.id}
-                        checked={isChecked}
-                        disabled={isLocked || saving === c.id}
-                        onChange={() => choose(c.id, n.id)}
-                        style={{ width: 18, height: 18 }}
+                      <input 
+                        type="radio" 
+                        name={cat.id}
+                        checked={active}
+                        disabled={isLocked || saving === cat.id}
+                        onChange={() => handleVote(cat.id, nom.id)}
                       />
-                      <span style={{ fontWeight: isChecked ? 600 : 400 }}>
-                        {n.name} {n.film && <span style={{ opacity: 0.6, fontWeight: 400 }}>— {n.film}</span>}
+                      <span style={{ fontSize: "14px" }}>
+                        <strong>{nom.name}</strong> {nom.film && <span style={{ opacity: 0.7 }}>— {nom.film}</span>}
                       </span>
                     </label>
                   );
                 })}
               </div>
-
-              <div style={{ marginTop: 12, fontSize: 12, color: saving === c.id ? "#0070f3" : "#666" }}>
-                {saving === c.id ? "Salvando alteração..." : selectedId ? "Palpite salvo" : "Nenhum selecionado"}
+              
+              <div style={{ marginTop: 12, fontSize: "11px", color: "#999" }}>
+                {saving === cat.id ? "Salvando..." : selectedNomineeId ? "✓ Salvo" : "Pendente"}
               </div>
             </section>
           );
