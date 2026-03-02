@@ -9,7 +9,6 @@ type Nominee = { id: string; category_id: string; name: string; film: string | n
 type Result = { category_id: string; winner_nominee_id: string };
 
 type AdminCheckResponse = { ok: boolean; error?: string };
-
 type ApiErrorResponse = { error?: string };
 type ApiOkResponse = { ok: true };
 type SetWinnerResponse = ApiOkResponse | ApiErrorResponse;
@@ -129,7 +128,11 @@ export default function AdminPage() {
     load();
   }, [router]);
 
-  async function setWinner(categoryId: string, nomineeId: string) {
+  // FUNÇÃO MODIFICADA PARA SUPORTAR LIMPEZA (TOGGLE)
+  async function toggleWinner(categoryId: string, nomineeId: string) {
+    const isCurrentWinner = results[categoryId] === nomineeId;
+    const newWinnerId = isCurrentWinner ? null : nomineeId;
+
     setError(null);
     setSavingCat(categoryId);
 
@@ -148,17 +151,26 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category_id: categoryId, winner_nominee_id: nomineeId }),
+        body: JSON.stringify({ category_id: categoryId, winner_nominee_id: newWinnerId }),
       });
 
       const json = (await res.json().catch((): SetWinnerResponse => ({}))) as SetWinnerResponse;
 
       if (!res.ok) {
-        setError(("error" in json && json.error) ? json.error : "Erro ao salvar vencedor");
+        setError(("error" in json && json.error) ? json.error : "Erro ao atualizar vencedor");
         return;
       }
 
-      setResults((prev) => ({ ...prev, [categoryId]: nomineeId }));
+      // Se for null, removemos a chave do estado. Se não, atualizamos.
+      setResults((prev) => {
+        const newResults = { ...prev };
+        if (newWinnerId === null) {
+          delete newResults[categoryId];
+        } else {
+          newResults[categoryId] = newWinnerId;
+        }
+        return newResults;
+      });
     } catch (e) {
       const msg = e instanceof Error ? e.message : String(e);
       setError(msg);
@@ -205,21 +217,28 @@ export default function AdminPage() {
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
               <h2 style={{ margin: 0 }}>{cat.name}</h2>
               <span style={{ opacity: 0.7, fontSize: 12 }}>
-                {savingCat === cat.id ? "Salvando..." : results[cat.id] ? "Salvo ✅" : ""}
+                {savingCat === cat.id ? "Atualizando..." : results[cat.id] ? "Salvo ✅" : ""}
               </span>
             </div>
 
             <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
               {catNominees.map((n) => {
                 const label = n.film ? `${n.name} — ${n.film}` : n.name;
+                const isChecked = results[cat.id] === n.id;
 
                 return (
-                  <label key={n.id} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <label key={n.id} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
                     <input
                       type="radio"
-                      checked={results[cat.id] === n.id}
+                      checked={isChecked}
                       disabled={savingCat === cat.id}
-                      onChange={() => setWinner(cat.id, n.id)}
+                      // Usamos onClick e prevenimos o comportamento padrão para controlar manualmente
+                      onClick={(e) => {
+                        e.preventDefault();
+                        toggleWinner(cat.id, n.id);
+                      }}
+                      // Mantemos um onChange vazio para evitar avisos do React
+                      onChange={() => {}}
                     />
                     {label}
                   </label>
