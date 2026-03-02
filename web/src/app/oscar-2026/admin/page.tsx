@@ -131,7 +131,10 @@ export default function AdminPage() {
   // FUNÇÃO MODIFICADA PARA SUPORTAR LIMPEZA (TOGGLE)
   async function toggleWinner(categoryId: string, nomineeId: string) {
     const isCurrentWinner = results[categoryId] === nomineeId;
-    const newWinnerId = isCurrentWinner ? null : nomineeId;
+    
+    // Se já é o vencedor, queremos "limpar" enviando nulo ou vazio
+    // Se não é, enviamos o novo ID
+    const valueToSend = isCurrentWinner ? null : nomineeId;
 
     setError(null);
     setSavingCat(categoryId);
@@ -151,29 +154,33 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        body: JSON.stringify({ category_id: categoryId, winner_nominee_id: newWinnerId }),
+        // Enviamos o objeto. Se a API reclamar de 'null', o erro persistirá.
+        body: JSON.stringify({ 
+          category_id: categoryId, 
+          winner_nominee_id: valueToSend 
+        }),
       });
 
-      const json = (await res.json().catch((): SetWinnerResponse => ({}))) as SetWinnerResponse;
+      const json = (await res.json().catch(() => ({}))) as any;
 
       if (!res.ok) {
-        setError(("error" in json && json.error) ? json.error : "Erro ao atualizar vencedor");
+        // Se o erro for "Missing fields", a sua API no arquivo route.ts 
+        // possui um "if (!winner_nominee_id)" que impede o valor nulo.
+        setError(json.error || "Erro ao atualizar vencedor");
         return;
       }
 
-      // Se for null, removemos a chave do estado. Se não, atualizamos.
       setResults((prev) => {
         const newResults = { ...prev };
-        if (newWinnerId === null) {
+        if (valueToSend === null) {
           delete newResults[categoryId];
         } else {
-          newResults[categoryId] = newWinnerId;
+          newResults[categoryId] = valueToSend;
         }
         return newResults;
       });
     } catch (e) {
-      const msg = e instanceof Error ? e.message : String(e);
-      setError(msg);
+      setError(e instanceof Error ? e.message : "Erro desconhecido");
     } finally {
       setSavingCat(null);
     }
