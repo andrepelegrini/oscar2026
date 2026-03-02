@@ -128,13 +128,10 @@ export default function AdminPage() {
     load();
   }, [router]);
 
-  // FUNÇÃO MODIFICADA PARA SUPORTAR LIMPEZA (TOGGLE)
   async function toggleWinner(categoryId: string, nomineeId: string) {
+    // Verifica se já é o vencedor atual para decidir se limpa ou marca novo
     const isCurrentWinner = results[categoryId] === nomineeId;
-    
-    // Se já é o vencedor, queremos "limpar" enviando nulo ou vazio
-    // Se não é, enviamos o novo ID
-    const valueToSend = isCurrentWinner ? null : nomineeId;
+    const winnerIdToSend = isCurrentWinner ? null : nomineeId;
 
     setError(null);
     setSavingCat(categoryId);
@@ -154,28 +151,27 @@ export default function AdminPage() {
           "Content-Type": "application/json",
           Authorization: `Bearer ${token}`,
         },
-        // Enviamos o objeto. Se a API reclamar de 'null', o erro persistirá.
         body: JSON.stringify({ 
           category_id: categoryId, 
-          winner_nominee_id: valueToSend 
+          winner_nominee_id: winnerIdToSend 
         }),
       });
 
       const json = (await res.json().catch(() => ({}))) as any;
 
       if (!res.ok) {
-        // Se o erro for "Missing fields", a sua API no arquivo route.ts 
-        // possui um "if (!winner_nominee_id)" que impede o valor nulo.
-        setError(json.error || "Erro ao atualizar vencedor");
+        // Se der "Missing fields", precisamos ajustar a API route.ts
+        setError(json.error || "Erro ao salvar vencedor");
         return;
       }
 
+      // Atualiza o estado local para refletir a mudança imediatamente
       setResults((prev) => {
         const newResults = { ...prev };
-        if (valueToSend === null) {
+        if (winnerIdToSend === null) {
           delete newResults[categoryId];
         } else {
-          newResults[categoryId] = valueToSend;
+          newResults[categoryId] = winnerIdToSend;
         }
         return newResults;
       });
@@ -202,8 +198,8 @@ export default function AdminPage() {
       <h1 style={{ fontSize: 28, marginBottom: 12 }}>Admin — Lançar vencedores</h1>
 
       {error && (
-        <div style={{ marginBottom: 16, padding: 12, border: "1px solid crimson", borderRadius: 12 }}>
-          <b>Erro:</b> {error}
+        <div style={{ marginBottom: 16, padding: 12, border: "1px solid crimson", borderRadius: 12, color: "crimson" }}>
+          <b>Aviso:</b> {error === "Missing fields" ? "A API não aceita desmarcar (valor nulo). É necessário ajustar o arquivo route.ts" : error}
         </div>
       )}
 
@@ -222,32 +218,42 @@ export default function AdminPage() {
             }}
           >
             <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0 }}>{cat.name}</h2>
-              <span style={{ opacity: 0.7, fontSize: 12 }}>
-                {savingCat === cat.id ? "Atualizando..." : results[cat.id] ? "Salvo ✅" : ""}
+              <h2 style={{ margin: 0, fontSize: 20 }}>{cat.name}</h2>
+              <span style={{ opacity: 0.7, fontSize: 12, color: "var(--gold)" }}>
+                {savingCat === cat.id ? "Processando..." : results[cat.id] ? "Salvo ✅" : "Pendente"}
               </span>
             </div>
 
-            <div style={{ marginTop: 10, display: "grid", gap: 8 }}>
+            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
               {catNominees.map((n) => {
+                const isSelected = results[cat.id] === n.id;
                 const label = n.film ? `${n.name} — ${n.film}` : n.name;
-                const isChecked = results[cat.id] === n.id;
 
                 return (
-                  <label key={n.id} style={{ display: "flex", gap: 8, alignItems: "center", cursor: "pointer" }}>
+                  <label 
+                    key={n.id} 
+                    style={{ 
+                      display: "flex", 
+                      gap: 10, 
+                      alignItems: "center", 
+                      padding: "8px 12px",
+                      borderRadius: 8,
+                      background: isSelected ? "rgba(255,255,255,0.05)" : "transparent",
+                      cursor: "pointer" 
+                    }}
+                    // O segredo está no onClick do label para capturar o clique no rádio já marcado
+                    onClick={(e) => {
+                      e.preventDefault();
+                      if (savingCat !== cat.id) toggleWinner(cat.id, n.id);
+                    }}
+                  >
                     <input
                       type="radio"
-                      checked={isChecked}
-                      disabled={savingCat === cat.id}
-                      // Usamos onClick e prevenimos o comportamento padrão para controlar manualmente
-                      onClick={(e) => {
-                        e.preventDefault();
-                        toggleWinner(cat.id, n.id);
-                      }}
-                      // Mantemos um onChange vazio para evitar avisos do React
-                      onChange={() => {}}
+                      checked={isSelected}
+                      readOnly
+                      style={{ cursor: "pointer", accentColor: "var(--gold)" }}
                     />
-                    {label}
+                    <span style={{ fontWeight: isSelected ? 600 : 400 }}>{label}</span>
                   </label>
                 );
               })}
