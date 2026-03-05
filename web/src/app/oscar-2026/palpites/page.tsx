@@ -197,11 +197,38 @@ export default function PalpitesPage() {
 
   return (
     <div style={{ maxWidth: 800, margin: "0 auto", padding: "40px 20px" }}>
-      <header style={{ marginBottom: 40 }}>
-        <h1 style={{ fontSize: 32 }}>Meus Palpites 🏆</h1>
-        <p style={{ opacity: 0.7 }}>
-          {isLocked ? "🔒 Votação encerrada" : "Sua escolha é salva automaticamente."}
-        </p>
+      {/* HEADER COM BOTÃO DE HOME */}
+      <header style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "flex-start", 
+        marginBottom: 40 
+      }}>
+        <div>
+          <h1 style={{ fontSize: 32, margin: 0 }}>Meus Palpites 🏆</h1>
+          <p style={{ opacity: 0.7, marginTop: 4 }}>
+            {isLocked ? "🔒 Votação encerrada" : "Sua escolha é salva automaticamente."}
+          </p>
+        </div>
+
+        <button
+          onClick={() => router.push("/")}
+          style={{
+            padding: "10px 18px",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            cursor: "pointer",
+            color: "var(--text)",
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 14
+          }}
+        >
+          🏠 Início
+        </button>
       </header>
 
       <div style={{ display: "grid", gap: 24 }}>
