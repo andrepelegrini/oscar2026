@@ -1,67 +1,57 @@
+import { supabaseAdmin } from "@/lib/supabase/admin";
+import { supabase } from "@/lib/supabase/client"; // Usando seu cliente existente
 import { NextResponse } from "next/server";
-import { createClient } from "@supabase/supabase-js";
 
-function required(name: string) {
-  const value = process.env[name];
-  if (!value) {
-    throw new Error(`Missing env var: ${name}`);
-  }
-  return value;
-}
+export async function POST(request: Request) {
+  try {
+    // 1. Verificar se o usuário está logado
+    // Em rotas de API, o getSession() olha os cookies automaticamente se o client estiver configurado
+    const { data: { session } } = await supabase.auth.getSession();
 
-export async function POST(req: Request) {
-  // 🔐 Fail-fast: garante que as env vars existem no build/runtime
-  const url = required("NEXT_PUBLIC_SUPABASE_URL");
-  const anonKey = required("NEXT_PUBLIC_SUPABASE_ANON_KEY");
-  const serviceKey = required("SUPABASE_SERVICE_ROLE_KEY");
-  const adminEmail = required("ADMIN_EMAIL");
+    if (!session) {
+      return NextResponse.json({ error: "Não autorizado" }, { status: 401 });
+    }
 
-  // 🔑 Pega token do usuário logado
-  const authHeader = req.headers.get("authorization");
-  const token = authHeader?.replace("Bearer ", "") ?? null;
+    // 2. Receber os dados
+    const { category_id, winner_nominee_id } = await request.json();
 
-  if (!token) {
-    return NextResponse.json({ error: "No token" }, { status: 401 });
-  }
+    if (!category_id) {
+      return NextResponse.json({ error: "category_id é obrigatório" }, { status: 400 });
+    }
 
-  // 👤 Valida usuário usando anon key
-  const supabaseAnon = createClient(url, anonKey);
-  const { data: userData, error: userError } =
-    await supabaseAnon.auth.getUser(token);
+    // 3. Ação no Banco de Dados usando o Admin (que tem permissão total)
+    if (winner_nominee_id === null) {
+      // Deletar o registro para limpar o vencedor
+      const { error: deleteError } = await supabaseAdmin
+        .from("results")
+        .delete()
+        .eq("category_id", category_id);
 
-  if (userError || !userData.user) {
-    return NextResponse.json({ error: "Invalid session" }, { status: 401 });
-  }
+      if (deleteError) throw deleteError;
+      
+      return NextResponse.json({ ok: true, message: "Vencedor removido" });
+    } else {
+      // Inserir ou atualizar vencedor
+      const { error: upsertError } = await supabaseAdmin
+        .from("results")
+        .upsert(
+          { 
+            category_id, 
+            winner_nominee_id 
+          },
+          { onConflict: "category_id" }
+        );
 
-  const email = (userData.user.email ?? "").toLowerCase();
-  if (email !== adminEmail.toLowerCase()) {
-    return NextResponse.json({ error: "Forbidden" }, { status: 403 });
-  }
+      if (upsertError) throw upsertError;
 
-  // 📦 Dados enviados
-  const body = await req.json();
-  const { category_id, winner_nominee_id } = body ?? {};
+      return NextResponse.json({ ok: true, message: "Vencedor salvo" });
+    }
 
-  if (!category_id || !winner_nominee_id) {
-    return NextResponse.json({ error: "Missing fields" }, { status: 400 });
-  }
-
-  // 🛠️ Usa SERVICE ROLE para bypass do RLS
-  const supabaseAdmin = createClient(url, serviceKey);
-
-  const { error: upsertError } = await supabaseAdmin
-    .from("results")
-    .upsert(
-      { category_id, winner_nominee_id },
-      { onConflict: "category_id" }
-    );
-
-  if (upsertError) {
+  } catch (error: any) {
+    console.error("Erro na API set-winner:", error);
     return NextResponse.json(
-      { error: upsertError.message },
+      { error: error.message || "Erro interno" }, 
       { status: 500 }
     );
   }
-
-  return NextResponse.json({ ok: true });
 }
