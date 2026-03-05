@@ -189,11 +189,38 @@ export default function AdminPage() {
 
   return (
     <main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      <h1 style={{ fontSize: 28, marginBottom: 12 }}>Admin — Lançar vencedores</h1>
+      {/* CABEÇALHO COM O BOTÃO DE HOME */}
+      <div style={{ 
+        display: "flex", 
+        justifyContent: "space-between", 
+        alignItems: "center", 
+        marginBottom: 32 
+      }}>
+        <h1 style={{ fontSize: 28, margin: 0 }}>Admin — Lançar vencedores</h1>
+        
+        <button
+          onClick={() => router.push("/")}
+          style={{
+            padding: "10px 18px",
+            borderRadius: 10,
+            border: "1px solid var(--border)",
+            background: "var(--card)",
+            cursor: "pointer",
+            color: "var(--text)",
+            fontWeight: 500,
+            display: 'flex',
+            alignItems: 'center',
+            gap: 8,
+            fontSize: 14
+          }}
+        >
+          🏠 Início
+        </button>
+      </div>
 
       {error && (
         <div style={{ marginBottom: 16, padding: 12, border: "1px solid crimson", borderRadius: 12, color: "crimson" }}>
-          <b>Aviso:</b> {error === "Missing fields" ? "A API não aceita desmarcar (valor nulo). É necessário ajustar o arquivo route.ts" : error}
+          <b>Aviso:</b> {error}
         </div>
       )}
 
