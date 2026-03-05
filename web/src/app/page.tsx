@@ -1,286 +1,90 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
+import { AppShell } from "@/components/AppShell";
+import { getParticipantId, setParticipantId } from "@/lib/participant";
 
-type Category = { id: string; name: string };
-type Nominee = { id: string; category_id: string; name: string; film: string | null };
-type Result = { category_id: string; winner_nominee_id: string };
+const Footer = () => (
+  <footer style={{
+    textAlign: "center",
+    padding: "40px 20px",
+    opacity: 0.5,
+    fontSize: 13,
+    borderTop: "1px solid var(--border)",
+    marginTop: "auto",
+    width: "100%"
+  }}>
+    <p>© {new Date().getFullYear()} Bolão do Oscar. Todos os direitos reservados.</p>
+  </footer>
+);
 
-type AdminCheckResponse = { ok: boolean; error?: string };
-
-export default function AdminPage() {
+export default function HomePage() {
   const router = useRouter();
+  const [name, setName] = useState("");
+  const [loading, setLoading] = useState(false);
+  const [participantId, setLocalParticipantId] = useState<string | null>(() => {
+    if (typeof window !== "undefined") return getParticipantId();
+    return null;
+  });
 
-  const [categories, setCategories] = useState<Category[]>([]);
-  const [nominees, setNominees] = useState<Nominee[]>([]);
-  const [results, setResults] = useState<Record<string, string>>({});
-  const [loading, setLoading] = useState(true);
-  const [unauthorized, setUnauthorized] = useState(false);
-  const [error, setError] = useState<string | null>(null);
-  const [savingCat, setSavingCat] = useState<string | null>(null);
-
-  useEffect(() => {
-    async function load() {
-      setError(null);
-      setUnauthorized(false);
-      setLoading(true);
-
-      try {
-        const { data: sessionData } = await supabase.auth.getSession();
-        const token = sessionData.session?.access_token;
-
-        if (!token) {
-          router.push("/login");
-          return;
-        }
-
-        const controller = new AbortController();
-        const timeout = setTimeout(() => controller.abort(), 8000);
-
-        let checkRes: Response;
-        try {
-          checkRes = await fetch("/api/admin/check", {
-            headers: { Authorization: `Bearer ${token}` },
-            signal: controller.signal,
-          });
-        } finally {
-          clearTimeout(timeout);
-        }
-
-        const checkJson = (await checkRes
-          .json()
-          .catch((): AdminCheckResponse => ({ ok: false, error: "Bad JSON" }))) as AdminCheckResponse;
-
-        if (!checkRes.ok || !checkJson.ok) {
-          setUnauthorized(true);
-          setLoading(false);
-          return;
-        }
-
-        const { data: event, error: evErr } = await supabase
-          .from("events")
-          .select("id")
-          .eq("slug", "oscar-2026")
-          .single<{ id: string }>();
-
-        if (evErr || !event) {
-          setError(evErr?.message ?? "Evento não encontrado");
-          setLoading(false);
-          return;
-        }
-
-        const { data: cats, error: catsErr } = await supabase
-          .from("categories")
-          .select("id,name")
-          .eq("event_id", event.id)
-          .order("sort_order")
-          .returns<Category[]>();
-
-        if (catsErr) {
-          setError(catsErr.message);
-          setLoading(false);
-          return;
-        }
-
-        const { data: noms, error: nomsErr } = await supabase
-          .from("nominees")
-          .select("id,category_id,name,film")
-          .returns<Nominee[]>();
-
-        if (nomsErr) {
-          setError(nomsErr.message);
-          setLoading(false);
-          return;
-        }
-
-        const { data: res, error: resErr } = await supabase
-          .from("results")
-          .select("category_id,winner_nominee_id")
-          .returns<Result[]>();
-
-        if (resErr) {
-          setError(resErr.message);
-          setLoading(false);
-          return;
-        }
-
-        const map: Record<string, string> = {};
-        res?.forEach((r) => {
-          map[r.category_id] = r.winner_nominee_id;
-        });
-
-        setCategories(cats ?? []);
-        setNominees(noms ?? []);
-        setResults(map);
-        setLoading(false);
-      } catch (e) {
-        const msg = e instanceof Error ? e.message : String(e);
-        setError(msg);
-        setLoading(false);
-      }
+  async function handleEnter() {
+    if (!name.trim()) return;
+    setLoading(true);
+    const { data, error } = await supabase.from("participants").insert({ name: name.trim() }).select().single();
+    if (error) {
+      alert("Erro ao criar participante.");
+      setLoading(false);
+      return;
     }
-
-    load();
-  }, [router]);
-
-  async function toggleWinner(categoryId: string, nomineeId: string) {
-    const isCurrentWinner = results[categoryId] === nomineeId;
-    const winnerIdToSend = isCurrentWinner ? null : nomineeId;
-
-    setError(null);
-    setSavingCat(categoryId);
-
-    try {
-      const { data: sessionData } = await supabase.auth.getSession();
-      const token = sessionData.session?.access_token;
-
-      if (!token) {
-        router.push("/login");
-        return;
-      }
-
-      const res = await fetch("/api/admin/set-winner", {
-        method: "POST",
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${token}`,
-        },
-        body: JSON.stringify({ 
-          category_id: categoryId, 
-          winner_nominee_id: winnerIdToSend 
-        }),
-      });
-
-      const json = await res.json().catch(() => ({}));
-
-      if (!res.ok) {
-        setError(json.error || "Erro ao salvar vencedor");
-        return;
-      }
-
-      setResults((prev) => {
-        const newResults = { ...prev };
-        if (winnerIdToSend === null) {
-          delete newResults[categoryId];
-        } else {
-          newResults[categoryId] = winnerIdToSend;
-        }
-        return newResults;
-      });
-    } catch (e) {
-      setError(e instanceof Error ? e.message : "Erro desconhecido");
-    } finally {
-      setSavingCat(null);
-    }
+    setParticipantId(data.id);
+    setLocalParticipantId(data.id);
+    router.push("/oscar-2026/palpites");
   }
 
-  if (loading) return <main style={{ padding: 24 }}>Carregando...</main>;
-
-  if (unauthorized) {
+  if (!participantId) {
     return (
-      <main style={{ padding: 24 }}>
-        <h1 style={{ fontSize: 24 }}>Acesso negado</h1>
-        <p style={{ opacity: 0.8 }}>Você não tem permissão para ver esta página.</p>
-      </main>
+      <AppShell>
+        <div style={{ display: "flex", flexDirection: "column", minHeight: "80vh" }}>
+          <div style={{ maxWidth: 500, margin: "80px auto 40px", padding: "0 20px", flex: 1 }}>
+            <h1 style={{ fontSize: 42, marginBottom: 8 }}>Entrar no Bolão</h1>
+            <p style={{ color: "var(--text-muted)", marginBottom: 24 }}>Participe e faça seus palpites para o Oscar 2026.</p>
+            <input
+              placeholder="Digite seu nome"
+              value={name}
+              onChange={(e) => setName(e.target.value)}
+              style={{ width: "100%", padding: 14, borderRadius: 12, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", fontSize: 16, outline: "none" }}
+            />
+            <button
+              onClick={handleEnter}
+              disabled={loading}
+              style={{ marginTop: 16, width: "100%", padding: 14, borderRadius: 14, border: "none", cursor: loading ? "not-allowed" : "pointer", background: "linear-gradient(180deg, var(--gold), var(--gold-light))", color: "#000", fontWeight: 600, fontSize: 16, opacity: loading ? 0.7 : 1 }}
+            >
+              {loading ? "Entrando..." : "Entrar no Bolão"}
+            </button>
+          </div>
+          <Footer />
+        </div>
+      </AppShell>
     );
   }
 
   return (
-    <main style={{ padding: 24, maxWidth: 800, margin: "0 auto" }}>
-      {/* HEADER COM BOTÃO DE VOLTAR */}
-      <div style={{ 
-        display: "flex", 
-        justifyContent: "space-between", 
-        alignItems: "center", 
-        marginBottom: 32 
-      }}>
-        <h1 style={{ fontSize: 28, margin: 0 }}>Admin — Lançar vencedores</h1>
-        
-        <button
-          onClick={() => router.push("/")}
-          style={{
-            padding: "10px 18px",
-            borderRadius: 10,
-            border: "1px solid var(--border)",
-            background: "var(--card)",
-            cursor: "pointer",
-            color: "var(--text)",
-            fontWeight: 500,
-            display: 'flex',
-            alignItems: 'center',
-            gap: 8,
-            fontSize: 14
-          }}
-        >
-          🏠 Início
-        </button>
-      </div>
-
-      {error && (
-        <div style={{ marginBottom: 16, padding: 12, border: "1px solid crimson", borderRadius: 12, color: "crimson" }}>
-          <b>Aviso:</b> {error}
-        </div>
-      )}
-
-      {categories.map((cat) => {
-        const catNominees = nominees.filter((n) => n.category_id === cat.id);
-
-        return (
-          <section
-            key={cat.id}
-            style={{
-              border: "1px solid #222",
-              borderRadius: 16,
-              padding: 16,
-              marginBottom: 16,
-              opacity: savingCat === cat.id ? 0.7 : 1,
-            }}
+    <AppShell>
+      <div style={{ display: "flex", flexDirection: "column", minHeight: "80vh" }}>
+        <div style={{ textAlign: "center", marginTop: 80, padding: "0 20px", flex: 1 }}>
+          <h1 style={{ fontSize: 36 }}>Bem-vindo ao Bolão 🎬</h1>
+          <p style={{ marginTop: 8, color: "var(--text-muted)" }}>Seu acesso está ativo. Pronto para votar?</p>
+          <button
+            style={{ marginTop: 24, padding: "16px 32px", borderRadius: 14, border: "1px solid var(--border)", background: "var(--card)", color: "var(--text)", cursor: "pointer", fontWeight: 500, fontSize: 16 }}
+            onClick={() => router.push("/oscar-2026/palpites")}
           >
-            <div style={{ display: "flex", justifyContent: "space-between", gap: 12 }}>
-              <h2 style={{ margin: 0, fontSize: 20 }}>{cat.name}</h2>
-              <span style={{ opacity: 0.7, fontSize: 12, color: "var(--gold)" }}>
-                {savingCat === cat.id ? "Processando..." : results[cat.id] ? "Salvo ✅" : "Pendente"}
-              </span>
-            </div>
-
-            <div style={{ marginTop: 14, display: "grid", gap: 8 }}>
-              {catNominees.map((n) => {
-                const isSelected = results[cat.id] === n.id;
-                const label = n.film ? `${n.name} — ${n.film}` : n.name;
-
-                return (
-                  <label 
-                    key={n.id} 
-                    style={{ 
-                      display: "flex", 
-                      gap: 10, 
-                      alignItems: "center", 
-                      padding: "8px 12px",
-                      borderRadius: 8,
-                      background: isSelected ? "rgba(255,255,255,0.05)" : "transparent",
-                      cursor: "pointer" 
-                    }}
-                    onClick={(e) => {
-                      e.preventDefault();
-                      if (savingCat !== cat.id) toggleWinner(cat.id, n.id);
-                    }}
-                  >
-                    <input
-                      type="radio"
-                      checked={isSelected}
-                      readOnly
-                      style={{ cursor: "pointer", accentColor: "var(--gold)" }}
-                    />
-                    <span style={{ fontWeight: isSelected ? 600 : 400 }}>{label}</span>
-                  </label>
-                );
-              })}
-            </div>
-          </section>
-        );
-      })}
-    </main>
+            Ir para Meus Palpites
+          </button>
+        </div>
+        <Footer />
+      </div>
+    </AppShell>
   );
 }
