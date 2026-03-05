@@ -9,13 +9,11 @@ import Image from "next/image";
 type EventRow = { id: string; slug: string; deadline_at: string };
 type CategoryRow = { id: string; name: string; weight: number; sort_order: number };
 type NomineeRow = { id: string; category_id: string; name: string; film: string | null };
-type PredictionRow = { category_id: string; nominee_id: string };
 
 export default function PalpitesPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<string | null>(null);
-  const [error, setError] = useState<string | null>(null);
 
   const [event, setEvent] = useState<EventRow | null>(null);
   const [categories, setCategories] = useState<CategoryRow[]>([]);
@@ -42,7 +40,6 @@ export default function PalpitesPage() {
 
   useEffect(() => {
     async function load() {
-      setError(null);
       setLoading(true);
 
       const pId = getParticipantId();
@@ -58,7 +55,6 @@ export default function PalpitesPage() {
         .single();
 
       if (evErr) {
-        setError("Evento não encontrado.");
         setLoading(false);
         return;
       }
@@ -70,7 +66,6 @@ export default function PalpitesPage() {
       ]);
 
       if (catsRes.error || nomsRes.error || predsRes.error) {
-        setError("Erro ao carregar dados.");
         setLoading(false);
         return;
       }
@@ -112,7 +107,6 @@ export default function PalpitesPage() {
 
   if (loading) return <div style={{ padding: 40, textAlign: 'center' }}>Carregando bolão...</div>;
 
-  // TELA DE SUCESSO FINAL
   if (isFinished) {
     return (
       <div style={{ 
@@ -125,7 +119,6 @@ export default function PalpitesPage() {
         minHeight: '80vh',
         justifyContent: 'center'
       }}>
-        {/* IMAGEM PERSONALIZADA */}
         <div style={{ 
           marginBottom: 30, 
           borderRadius: 24, 
@@ -150,7 +143,6 @@ export default function PalpitesPage() {
         </p>
 
         <div style={{ display: 'flex', gap: 12, flexWrap: 'wrap', justifyContent: 'center' }}>
-          {/* BOTÃO VOLTAR PARA HOME */}
           <button
             onClick={() => router.push("/")}
             style={{

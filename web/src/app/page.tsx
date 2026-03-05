@@ -1,12 +1,11 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useRouter } from "next/navigation";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/AppShell";
 import { getParticipantId, setParticipantId } from "@/lib/participant";
 
-// 1. MOVIDO PARA FORA DO COMPONENTE PRINCIPAL
 const Footer = () => (
   <footer style={{
     textAlign: "center",
@@ -17,7 +16,7 @@ const Footer = () => (
     marginTop: "auto",
     width: "100%"
   }}>
-    <p>© {new Date().getFullYear()} André Pelegrini, founder @ Cadenzia. Todos os direitos reservados.</p>
+    <p>© {new Date().getFullYear()} Bolão do Oscar. Todos os direitos reservados.</p>
   </footer>
 );
 
@@ -57,7 +56,6 @@ export default function HomePage() {
     router.push("/oscar-2026/palpites");
   }
 
-  // Tela de Login
   if (!participantId) {
     return (
       <AppShell>
@@ -114,7 +112,6 @@ export default function HomePage() {
     );
   }
 
-  // Tela de Boas-vindas
   return (
     <AppShell>
       <div style={{ 

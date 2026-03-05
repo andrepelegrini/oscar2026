@@ -9,9 +9,6 @@ type Nominee = { id: string; category_id: string; name: string; film: string | n
 type Result = { category_id: string; winner_nominee_id: string };
 
 type AdminCheckResponse = { ok: boolean; error?: string };
-type ApiErrorResponse = { error?: string };
-type ApiOkResponse = { ok: true };
-type SetWinnerResponse = ApiOkResponse | ApiErrorResponse;
 
 export default function AdminPage() {
   const router = useRouter();
@@ -129,7 +126,6 @@ export default function AdminPage() {
   }, [router]);
 
   async function toggleWinner(categoryId: string, nomineeId: string) {
-    // Verifica se já é o vencedor atual para decidir se limpa ou marca novo
     const isCurrentWinner = results[categoryId] === nomineeId;
     const winnerIdToSend = isCurrentWinner ? null : nomineeId;
 
@@ -157,15 +153,13 @@ export default function AdminPage() {
         }),
       });
 
-      const json = (await res.json().catch(() => ({}))) as any;
+      const json = await res.json().catch(() => ({}));
 
       if (!res.ok) {
-        // Se der "Missing fields", precisamos ajustar a API route.ts
         setError(json.error || "Erro ao salvar vencedor");
         return;
       }
 
-      // Atualiza o estado local para refletir a mudança imediatamente
       setResults((prev) => {
         const newResults = { ...prev };
         if (winnerIdToSend === null) {
@@ -241,7 +235,6 @@ export default function AdminPage() {
                       background: isSelected ? "rgba(255,255,255,0.05)" : "transparent",
                       cursor: "pointer" 
                     }}
-                    // O segredo está no onClick do label para capturar o clique no rádio já marcado
                     onClick={(e) => {
                       e.preventDefault();
                       if (savingCat !== cat.id) toggleWinner(cat.id, n.id);
