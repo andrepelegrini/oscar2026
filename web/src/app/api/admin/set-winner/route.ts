@@ -43,7 +43,8 @@ export async function POST(request: Request) {
         .upsert(
           { 
             category_id, 
-            winner_nominee_id 
+            winner_nominee_id,
+            announced_at: new Date().toISOString()
           },
           { onConflict: "category_id" }
         );
