@@ -132,7 +132,7 @@ export default function RankingPage() {
 
     calculateRanking();
 
-    const interval = setInterval(calculateRanking, 5000);
+    const interval = setInterval(calculateRanking, 600000);
 
     return () => {
       isMounted = false;
