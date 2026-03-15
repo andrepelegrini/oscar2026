@@ -1,6 +1,6 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { supabase } from "@/lib/supabase/client";
 import { AppShell } from "@/components/AppShell";
 
@@ -33,11 +33,32 @@ type Prediction = {
   nominee_id: string;
 };
 
+const groups: Record<string, string[]> = {
+  "Amigos do Dudu": [
+    "38b3ecfe-d0aa-410f-ac25-12103d841f18",
+    "8f01c72a-cc4e-4bbf-9b60-17ff8ead02f2",
+    "a8e0d044-af5e-497d-bd88-99410c875baf",
+    "84f4b642-5738-46f8-b30f-04113d12d634",
+    "cf1f0b16-ea5e-4d31-a140-9dcaf363be9a",
+    "1f16c693-76ce-4c9c-ba88-44dffd21a2e2",
+    "d1a72262-323d-4944-b571-80d6a708ef9b",
+    "9d6fa7de-f35e-4ebd-a433-2fb2e6bf3277",
+    "8848b147-c929-4d36-90ef-b249cf0bbc0a",
+  ],
+  "Amigos da Vivian": [
+    "8848b147-c929-4d36-90ef-b249cf0bbc0a",
+    "d1a72262-323d-4944-b571-80d6a708ef9b",
+  ],
+};
+
+const GROUP_ALL = "global";
+
 export default function RankingPage() {
   const [ranking, setRanking] = useState<RankingRow[]>([]);
   const [loading, setLoading] = useState(true);
   const [announcedCount, setAnnouncedCount] = useState(0);
   const [totalCategories, setTotalCategories] = useState(0);
+  const [selectedGroup, setSelectedGroup] = useState<string>(GROUP_ALL);
 
   useEffect(() => {
     let isMounted = true;
@@ -140,6 +161,18 @@ export default function RankingPage() {
     };
   }, []);
 
+  const filteredRanking = useMemo(() => {
+    if (selectedGroup === GROUP_ALL) return ranking;
+
+    const groupMembers = new Set(groups[selectedGroup] || []);
+    return ranking.filter((row) => groupMembers.has(row.participant_id));
+  }, [ranking, selectedGroup]);
+
+  const title = useMemo(() => {
+    if (selectedGroup === GROUP_ALL) return "Ranking Global 🏆";
+    return `Ranking — ${selectedGroup} 🏆`;
+  }, [selectedGroup]);
+
   if (loading) {
     return (
       <div style={{ padding: 40, textAlign: "center" }}>
@@ -152,12 +185,58 @@ export default function RankingPage() {
     <AppShell>
       <main style={{ padding: "40px 20px", maxWidth: 800, margin: "0 auto" }}>
         <h1 style={{ fontSize: 32, marginBottom: 12, textAlign: "center" }}>
-          Ranking Global 🏆
+          {title}
         </h1>
 
         <p style={{ textAlign: "center", marginBottom: 24, opacity: 0.7 }}>
           {announcedCount} / {totalCategories} categorias anunciadas
         </p>
+
+        <div
+          style={{
+            display: "flex",
+            gap: 10,
+            flexWrap: "wrap",
+            justifyContent: "center",
+            marginBottom: 24,
+          }}
+        >
+          <button
+            onClick={() => setSelectedGroup(GROUP_ALL)}
+            style={{
+              padding: "10px 16px",
+              borderRadius: 999,
+              border: "1px solid var(--border)",
+              background:
+                selectedGroup === GROUP_ALL ? "var(--gold)" : "var(--card)",
+              color: selectedGroup === GROUP_ALL ? "#111" : "var(--text)",
+              fontWeight: 700,
+              cursor: "pointer",
+            }}
+          >
+            Global
+          </button>
+
+          {Object.keys(groups).map((groupName) => (
+            <button
+              key={groupName}
+              onClick={() => setSelectedGroup(groupName)}
+              style={{
+                padding: "10px 16px",
+                borderRadius: 999,
+                border: "1px solid var(--border)",
+                background:
+                  selectedGroup === groupName ? "var(--gold)" : "var(--card)",
+                color: selectedGroup === groupName ? "#111" : "var(--text)",
+                fontWeight: 700,
+                cursor: "pointer",
+                textTransform: "capitalize",
+              }}
+            >
+              {groupName}
+            </button>
+          ))}
+        </div>
 
         <table
           style={{
@@ -182,7 +261,7 @@ export default function RankingPage() {
             </tr>
           </thead>
           <tbody>
-            {ranking.map((row, index) => (
+            {filteredRanking.map((row, index) => (
               <tr
                 key={row.participant_id}
                 style={{ borderTop: "1px solid var(--border)" }}
@@ -209,9 +288,9 @@ export default function RankingPage() {
           </tbody>
         </table>
 
-        {ranking.length === 0 && (
+        {filteredRanking.length === 0 && (
           <p style={{ textAlign: "center", marginTop: 20, opacity: 0.6 }}>
-            Nenhum palpite registrado ainda.
+            Nenhum participante encontrado neste grupo.
           </p>
         )}
       </main>
