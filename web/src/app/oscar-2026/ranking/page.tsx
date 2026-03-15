@@ -45,6 +45,7 @@ const groups: Record<string, string[]> = {
     "9d6fa7de-f35e-4ebd-a433-2fb2e6bf3277",
     "8848b147-c929-4d36-90ef-b249cf0bbc0a",
     "95431ad6-b896-4104-be24-e737d56e4095",
+    "f45b7fd3-d899-4378-92ab-075be1c9c0f6",
   ],
   "Amigos da Vivian": [
     "8848b147-c929-4d36-90ef-b249cf0bbc0a",
