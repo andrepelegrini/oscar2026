@@ -44,6 +44,7 @@ const groups: Record<string, string[]> = {
     "d1a72262-323d-4944-b571-80d6a708ef9b",
     "9d6fa7de-f35e-4ebd-a433-2fb2e6bf3277",
     "8848b147-c929-4d36-90ef-b249cf0bbc0a",
+    "95431ad6-b896-4104-be24-e737d56e4095",
   ],
   "Amigos da Vivian": [
     "8848b147-c929-4d36-90ef-b249cf0bbc0a",
@@ -55,7 +56,8 @@ const groups: Record<string, string[]> = {
     "0e3c86ce-89d5-4140-aa43-64bc2f38d32e",
     "f45b7fd3-d899-4378-92ab-075be1c9c0f6",
     "e0b32f2b-35a7-4cd3-bf55-4ba20d378f09",
-    "5a15e074-b034-4a3f-9fc8-4a8f2bf7789d"
+    "5a15e074-b034-4a3f-9fc8-4a8f2bf7789d",
+    "95431ad6-b896-4104-be24-e737d56e4095"
   ],
 };
 
